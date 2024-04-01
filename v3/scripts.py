@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 import zipfile
 import os
+import re
 
 
 def set_border(style):
@@ -126,27 +127,46 @@ def create_concatenated_info(data_item):
         parts.append(payment_objective)
 
     schet_na_oplatu = data_item.get('schet_na_oplatu', '') # and etc
-    if schet_na_oplatu:
-        parts.append(f"Счет на оплату №{schet_na_oplatu}")
+    if str(schet_na_oplatu):
+        match = re.search(r'\d+', schet_na_oplatu)
+        if match:
+            schet_na_oplatu = schet_na_oplatu[match.start():].strip()
+            parts.append(f"Счет на оплату №{schet_na_oplatu}")
 
     esf = data_item.get('esf', '')
-    if str(esf).strip("№"):
-        parts.append(f"ЭСФ №{esf}")
+    if str(esf):
+        match = re.search(r'\d+', schet_na_oplatu)
+        if match:
+            esf = esf[match.start():].strip()
+            parts.append(f"ЭСФ №{esf}")
 
     avr = data_item.get('avr', '') # Retrieve AVR
-    if avr:
-        parts.append(f"Акт выполненных работ №{avr}")
+    if str(avr):
+        match = re.search(r'\d+', avr)
+        if match:
+            avr = avr[match.start():].strip()
+            parts.append(f"Акт выполненных работ №{avr}")
 
     akt_sverki = data_item.get('akt_sverki', '') # Retrieve Akt sverki
-    if akt_sverki:
-        parts.append(f"Акт сверки №{akt_sverki}")
+    if str(akt_sverki):
+        match = re.search(r'\d+', akt_sverki)
+        if match:
+            akt_sverki = akt_sverki[match.start():].strip()
+            parts.append(f"Акт сверки №{akt_sverki}")
+
     sz = data_item.get('sluzhebnaja_zapiska', '')
-    if sz:
-        parts.append(f'Служебная записка {sz}')
+    if str(sz):
+        match = re.search(r'\d+', sz)
+        if match:
+            sz = sz[match.start():].strip()
+            parts.append(f'Служебная записка {sz}')
 
     avansovy_otchet = data_item.get('avansovy_otchet', '') # Retrieve Avansovy Otchet
-    if avansovy_otchet:
-        parts.append(f"Авансовый отчет №{avansovy_otchet}")
+    if str(avansovy_otchet):
+        match = re.search(r'\d+', avansovy_otchet)
+        if match:
+            avansovy_otchet = avansovy_otchet[match.start():].strip()
+            parts.append(f"Авансовый отчет №{avansovy_otchet}")
 
     tru = data_item.get('TRU', '')
     if tru:
@@ -161,8 +181,18 @@ def create_concatenated_info(data_item):
         parts.append(f"Медиация/Решение суда №{mediation}")
 
     nakladnye = data_item.get('nakladnye', '')
-    if nakladnye:
-        parts.append(f"Накладные: {nakladnye}")
+    if str(nakladnye):
+        match = re.search(r'\d+', nakladnye)
+        if match:
+            nakladnye = nakladnye[match.start():].strip()
+            parts.append(f"Накладные: {nakladnye}")
+
+    sogl_o_rastor = data_item.get('sogl_o_rastor', '')
+    if str(sogl_o_rastor):
+        match = re.search(r'\d+', sogl_o_rastor)
+        if match:
+            sogl_o_rastor = sogl_o_rastor[match.start():].strip()
+            parts.append(f"Согл. о расторжении №{sogl_o_rastor}")
 
     prilozhenije = data_item.get('prilozhenija', '')
     if prilozhenije.lstrip('Приложение '):
