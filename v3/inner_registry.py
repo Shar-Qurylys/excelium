@@ -90,7 +90,7 @@ def add_coordinators_v4(sheet):
     # Add directors (final piece)
     sheet['B2'] = directors[0]
     sheet['B4'] = directors[1]
-    sheet['H11'] = ''
+    sheet['H11'] = '' # remove the temporary company name
 
 def loop_json(json_data, workbook):
     '''
