@@ -28,7 +28,7 @@ def format_row(sheet, row_number, columns):
                           end_color='FFFF00',
                           fill_type='solid')
     # Set the row height
-    sheet.row_dimensions[row_number].height = 100
+    # sheet.row_dimensions[row_number].height = 100 # turned off
 
     # Apply formatting to each cell in the row
     for col in columns:
@@ -36,7 +36,7 @@ def format_row(sheet, row_number, columns):
         cell.font = font
         cell.border = border
         cell.alignment = alignment
-        sheet[f'{col}{row_number}'].alignment = Alignment(horizontal='center')
+        sheet[f'{col}{row_number}'].alignment = alignment
 
 def set_cell_properties(sheet, row, column, value, border=None, alignment=None, font=None):
     '''
@@ -174,7 +174,7 @@ def create_concatenated_info(data_item):
 
     letter = data_item.get('letter', '')
     if letter:
-        parts.append(letter)
+        parts.append(f'Письмо {letter}')
 
     mediation = data_item.get('mediation', '')
     if mediation:

@@ -119,8 +119,7 @@ def loop_json(json_data, workbook):
                 workbook[object_name][f'G10'] = datetime.today()
                 workbook[object_name][f'F7'] = data[i]['registry_name']
 
-                #Zeile formatieren
-                format_row(workbook[object_name], row, cols)
+
 
                 # On dr JSON datei bekommn
 
@@ -137,6 +136,10 @@ def loop_json(json_data, workbook):
                 i_cell_str = create_concatenated_info(data[i])
 
                 workbook[object_name][f'I{row}'] = i_cell_str
+
+                #Zeile formatieren
+                format_row(workbook[object_name], row, cols)
+                workbook[object_name][f'F{row}'].alignment = Alignment(horizontal='left')
 
                 start_row += 1
             else:
