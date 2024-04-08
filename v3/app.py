@@ -52,6 +52,8 @@ def form_excel():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     filename = save_excel_on_server(workbook, base_dir, regnum)
 
+    workbook.close()
+
      # Construct a download URL or simply return the filename
     download_url = f"http://192.168.30.19:25351/saves/{filename}"
 

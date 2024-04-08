@@ -140,16 +140,13 @@ def loop_json(json_data, workbook):
 
                 #Zeile formatieren
                 format_row(workbook[object_name], row, cols)
-                workbook[object_name][f'F{row}'].alignment = Alignment(horizontal='left')
+                workbook[object_name][f'F{row}'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
                 start_row += 1
             else:
                 # test
                 row = start_row
                 object_name = data[i]['object_name']
-
-                #Zeile formatieren
-                format_row(workbook[object_name], row, cols)
 
                 sides_str = f'Заявитель: {data[i]["organization"]}'+'\n\n'+f'Кому: {data[i]["counteragent"]}'
 
@@ -163,6 +160,10 @@ def loop_json(json_data, workbook):
 
                 i_cell_str = create_concatenated_info(data[i])
                 workbook[object_name][f'I{row}'] = i_cell_str
+
+                #Zeile formatieren
+                format_row(workbook[object_name], row, cols)
+                workbook[object_name][f'F{row}'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
                 start_row += 1
 
@@ -184,6 +185,8 @@ def format_excel_inner(json_data):
             add_coordinators_v4(workbook[sheet])
             set_print_area(workbook[sheet])
             add_colontituls(workbook[sheet])
+        else:
+            workbook[sheet].sheet_state = 'hidden'
     hide_sheets(workbook, initial_sheets)
 
     return workbook

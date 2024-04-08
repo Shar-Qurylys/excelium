@@ -28,7 +28,7 @@ def format_row(sheet, row_number, columns):
                           end_color='FFFF00',
                           fill_type='solid')
     # Set the row height
-    # sheet.row_dimensions[row_number].height = 100 # turned off
+    sheet.row_dimensions[row_number].height = 100 # turned off
 
     # Apply formatting to each cell in the row
     for col in columns:
@@ -36,7 +36,7 @@ def format_row(sheet, row_number, columns):
         cell.font = font
         cell.border = border
         cell.alignment = alignment
-        sheet[f'{col}{row_number}'].alignment = alignment
+        sheet[f'F{row_number}'].alignment = Alignment(horizontal='left', wrapText=True)
 
 def set_cell_properties(sheet, row, column, value, border=None, alignment=None, font=None):
     '''
@@ -127,46 +127,46 @@ def create_concatenated_info(data_item):
         parts.append(payment_objective)
 
     schet_na_oplatu = data_item.get('schet_na_oplatu', '') # and etc
-    if str(schet_na_oplatu):
-        match = re.search(r'\d+', schet_na_oplatu)
-        if match:
-            schet_na_oplatu = schet_na_oplatu[match.start():].strip()
-            parts.append(f"Счет на оплату №{schet_na_oplatu}")
+    if schet_na_oplatu:
+        #match = re.search(r'\d+', schet_na_oplatu)
+        #if match:
+            #schet_na_oplatu = schet_na_oplatu[match.start():].strip()
+        parts.append(f"Счет на оплату №{schet_na_oplatu.lstrip('№')}")
 
     esf = data_item.get('esf', '')
     if str(esf):
-        match = re.search(r'\d+', schet_na_oplatu)
-        if match:
-            esf = esf[match.start():].strip()
-            parts.append(f"ЭСФ №{esf}")
+        #match = re.search(r'\d+', esf)
+        #if match:
+            #esf = esf[match.start():].strip()
+        parts.append(f"ЭСФ №{esf.lstrip('№')}")
 
     avr = data_item.get('avr', '') # Retrieve AVR
     if str(avr):
-        match = re.search(r'\d+', avr)
-        if match:
-            avr = avr[match.start():].strip()
-            parts.append(f"Акт выполненных работ №{avr}")
+        #match = re.search(r'\d+', avr)
+        #if match:
+            #avr = avr[match.start():].strip()
+        parts.append(f"Акт выполненных работ №{avr.lstrip('№')}")
 
     akt_sverki = data_item.get('akt_sverki', '') # Retrieve Akt sverki
     if str(akt_sverki):
-        match = re.search(r'\d+', akt_sverki)
-        if match:
-            akt_sverki = akt_sverki[match.start():].strip()
-            parts.append(f"Акт сверки №{akt_sverki}")
+        #match = re.search(r'\d+', akt_sverki)
+        #if match:
+            #akt_sverki = akt_sverki[match.start():].strip()
+        parts.append(f"Акт сверки {akt_sverki.lstrip('№')}")
 
     sz = data_item.get('sluzhebnaja_zapiska', '')
     if str(sz):
-        match = re.search(r'\d+', sz)
-        if match:
-            sz = sz[match.start():].strip()
-            parts.append(f'Служебная записка {sz}')
+        # match = re.search(r'\d+', sz)
+        # if match:
+        #     sz = sz[match.start():].strip()
+        parts.append(f'Служебная записка {sz}')
 
     avansovy_otchet = data_item.get('avansovy_otchet', '') # Retrieve Avansovy Otchet
     if str(avansovy_otchet):
-        match = re.search(r'\d+', avansovy_otchet)
-        if match:
-            avansovy_otchet = avansovy_otchet[match.start():].strip()
-            parts.append(f"Авансовый отчет №{avansovy_otchet}")
+        # match = re.search(r'\d+', avansovy_otchet)
+        # if match:
+        #     avansovy_otchet = avansovy_otchet[match.start():].strip()
+        parts.append(f"Авансовый отчет №{avansovy_otchet.lstrip('№')}")
 
     tru = data_item.get('TRU', '')
     if tru:
@@ -178,7 +178,7 @@ def create_concatenated_info(data_item):
 
     mediation = data_item.get('mediation', '')
     if mediation:
-        parts.append(f"Медиация/Решение суда №{mediation}")
+        parts.append(f"Медиация/Решение суда №{mediation.lstrip('№')}")
 
     nakladnye = data_item.get('nakladnye', '')
     if str(nakladnye):
@@ -192,7 +192,7 @@ def create_concatenated_info(data_item):
         match = re.search(r'\d+', sogl_o_rastor)
         if match:
             sogl_o_rastor = sogl_o_rastor[match.start():].strip()
-            parts.append(f"Согл. о расторжении №{sogl_o_rastor}")
+            parts.append(f"Согл. о расторжении №{sogl_o_rastor.lstrip('№')}")
 
     prilozhenije = data_item.get('prilozhenija', '')
     if prilozhenije.lstrip('Приложение '):
@@ -201,15 +201,18 @@ def create_concatenated_info(data_item):
     zusaetzliches_vertrag = data_item.get('zusaetzliches_vertrag', '')
     if zusaetzliches_vertrag != 'placeholder' and zusaetzliches_vertrag:
         zv_text = f'{zusaetzliches_vertrag}'.lstrip('Доп. соглашение')
-        parts.append(zv_text)
+        parts.append(f'ДС {zv_text}')
     else:
         name_of_contract = data_item.get('name_of_contract', '')
         date_of_contract = data_item.get('date_of_contract', '') # to be deleted
 
         if name_of_contract and date_of_contract:
             formatted_date = format_datetime(date_of_contract) # to be deleted
-            parts.append(f"Дог. №{name_of_contract}")
+            parts.append(f"Дог. {name_of_contract}")
 
+    payment_number = data_item.get('payment_number', '')
+    if payment_number:
+        parts.append(f"Заявка на оплату №{payment_number}")
     # Join all parts with ", " and remove trailing comma and space if any
     concatenated_info = ", ".join(parts).rstrip(", ")
 
