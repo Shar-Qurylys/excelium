@@ -100,9 +100,10 @@ def loop_json(json_data, workbook):
     for key_title, data in json_data.items():
 
         print(len(data)) #how many documents are fetched
-
+        sub = 0 # sub-nomer reestra
         for i in range(len(data)):
             if data[i]['object_name'] not in workbook.sheetnames:
+                sub += 1
 
                 start_row = 17 # starting row for the writing
                 row = start_row
@@ -118,9 +119,8 @@ def loop_json(json_data, workbook):
                 object_name = data[i]['object_name']
                 workbook[object_name][f'G11'] = object_name
                 workbook[object_name][f'G10'] = datetime.today()
-                workbook[object_name][f'F7'] = data[i]['registry_name']
-
-
+                registry_name = data[i]['registry_name']
+                workbook[object_name][f'F7'] = f'{registry_name}/{sub}'
 
                 # On dr JSON datei bekommn
 
@@ -179,14 +179,14 @@ def format_excel_inner(json_data):
 
     print('Looping through JSON. Adding documents')
     loop_json(json_data, workbook)
-
+    hide_sheets(workbook, initial_sheets)
     for sheet in workbook.sheetnames:
         if sheet not in initial_sheets:
             add_coordinators_v4(workbook[sheet])
             set_print_area(workbook[sheet])
             add_colontituls(workbook[sheet])
         else:
-            workbook[sheet].sheet_state = 'hidden'
-    hide_sheets(workbook, initial_sheets)
+            continue
+
 
     return workbook

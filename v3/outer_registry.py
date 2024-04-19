@@ -114,10 +114,9 @@ def loop_json_outer(json_data, workbook):
             source_sheet[f'C{row}'] = data[i]['organization'] # OrgName
             if data[i]['payment_type']:# Gebuhrtyp
                 source_sheet[f'E{row}'] = data[i]['payment_type']
-
             
             if data[i]['zusaetzliches_vertrag']:
-                osnovanije_str += f'Доп. соглашение №{data[i]["zusaetzliches_vertrag"]} от {data[i]["date_of_zv"],};' # if there is a chosen additional contract (DS)
+                osnovanije_str += f'Доп. соглашение №{data[i]["zusaetzliches_vertrag"]},' # if there is a chosen additional contract (DS)
 
             if data[i]['prilozhenija']: ### CHECK NAME PLACEHOLDER AKHMET
                 osnovanije_str += f'{data[i]["prilozhenija"]},'
