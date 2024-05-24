@@ -56,8 +56,8 @@ def add_coordinators_v4(sheet):
     '''
 
     col_index = 6 #F
-    formula_f = '=IF(ISNUMBER(VALUE(INDIRECT("B" & ROW()))), VLOOKUP(VALUE(INDIRECT("B" & ROW())), СПР_ПОДПИСАНТОВ!$B$14:$K$100, 9, 0) & " " & VLOOKUP(VALUE(INDIRECT("B" & ROW())), СПР_ПОДПИСАНТОВ!$B$14:$K$100, 7, 0), "")'
-    formula_i = '=IF(ISNUMBER(VALUE(INDIRECT("B" & ROW()))), VLOOKUP(VALUE(INDIRECT("B" & ROW())), СПР_ПОДПИСАНТОВ!$B$14:$K$100, 5, 0), "")'
+    formula_f = '=IFERROR(IF(ISNUMBER(VALUE(INDIRECT("B" & ROW()))), VLOOKUP(VALUE(INDIRECT("B" & ROW())), СПР_ПОДПИСАНТОВ!$B$14:$K$100, 9, 0) & " " & VLOOKUP(VALUE(INDIRECT("B" & ROW())), СПР_ПОДПИСАНТОВ!$B$14:$K$100, 7, 0), ""),"")'
+    formula_i = '=IFERROR(IF(ISNUMBER(VALUE(INDIRECT("B" & ROW()))), VLOOKUP(VALUE(INDIRECT("B" & ROW())), СПР_ПОДПИСАНТОВ!$B$14:$K$100, 5, 0), ""),"")'
 
     final_row = find_last_row_in_col(sheet, col_index)
 
@@ -68,15 +68,23 @@ def add_coordinators_v4(sheet):
 
     company = sheet['H11'].value # Get the company name from the sheet
     object_name = sheet['G11'].value # Get the object name from the sheet
+    doctype = sheet['H12'].value
 
     directors, coordinators_list = firmobj.check_company_object_pair(company, object_name) # Get the coordinators for the company and object
+    if sheet['G17'].value.lower() == 'коммерческие расходы':
+        coordinators_list = [i for i in coordinators_list if i not in [4, 6]]
+    else:
+        pass
+
+    if sheet['H12'].value.lower() == 'заявка на налоги':
+        coordinators_list =firmobj.return_administration_approvers()
 
     n = len(coordinators_list) # Get the number of coordinators
-    print(f'Company: {company}, Object: {object_name} Number of coordinators: {n}; coordinators: {coordinators_list}')
+    logging.info(f'Company: {company}, Object: {object_name} Number of coordinators: {n}; coordinators: {coordinators_list}')
     for i in range(1,n+1):
         formula_b = f'=INDEX(СПР_ОБЪЕКТОВ!$B$7:$K$80, MATCH($G11, СПР_ОБЪЕКТОВ!$B$7:$B$80, 0), {3 + i})'
         row = final_row + i * 3
-        
+
         if coordinators_list[i-1] != 3:
             set_cell_properties(sheet, row, 2, coordinators_list[i-1], set_border('thin'))
             set_cell_properties(sheet, row, 6, formula_f, None, Alignment(horizontal='left'), Font(size=14, bold=True))
@@ -86,11 +94,12 @@ def add_coordinators_v4(sheet):
             set_cell_properties(sheet, row + 2, 2, 3, set_border('thin'))
             set_cell_properties(sheet, row + 2, 6, formula_f, None, Alignment(horizontal='left'), Font(size=14, bold=True))
             set_cell_properties(sheet, row + 2, 9, formula_i, None, Alignment(horizontal='right'), Font(size=14, bold=True))
-    
+
     # Add directors (final piece)
     sheet['B2'] = directors[0]
     sheet['B4'] = directors[1]
     sheet['H11'] = '' # remove the temporary company name
+    sheet['H12'] = '' # remove the temporary document type
 
 def loop_json(json_data, workbook):
     '''

@@ -5,9 +5,21 @@ from datetime import datetime
 import zipfile
 import os
 import re
+# import logging
 
+# logging.basicConfig(
+#    level=logging.INFO,
+#    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#    handlers= [
+#        logging.FileHandler("access.log"),
+#        logging.StreamHandler()
+#    ]
+# )
+
+# logger = logging.getLogger(__name__)
 
 def set_border(style):
+    #logger.debug(f'Setting border with style: {style}')
     border = Border(left=Side(style=style),
                 right=Side(style=style),
                 top=Side(style=style),
@@ -15,20 +27,18 @@ def set_border(style):
     return border
 
 def format_row(sheet, row_number, columns):
-    # Define the font, border, and alignment
-    font = Font(name='Arial', size=12)
+    #logger.debug(f"Formatting row {row_number} with columns {columns}")
 
-    #set thin border
-    border = set_border('thin')
-
-    alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    font = Font(name='Arial', size=12) # Define the font, border, and alignment
+    border = set_border('thin')  #set thin border
+    alignment = Alignment(horizontal='center', vertical='center', wrap_text=True) # set alignment.
 
     # Create a fill object with yellow color
     yellow_fill = PatternFill(start_color='FFFF00',
                           end_color='FFFF00',
                           fill_type='solid')
     # Set the row height
-    sheet.row_dimensions[row_number].height = 100 # turned off
+    sheet.row_dimensions[row_number].height = 100 # turned off --Not turned off
 
     # Apply formatting to each cell in the row
     for col in columns:
@@ -57,6 +67,7 @@ def set_cell_properties(sheet, row, column, value, border=None, alignment=None, 
     - None
     '''
 
+    # logger.debug(f'Setting cell properties at row {row}, column {column}, with formula as value.')
     cell = sheet.cell(row=row, column=column, value=value)
     if border:
         cell.border = border
@@ -66,6 +77,7 @@ def set_cell_properties(sheet, row, column, value, border=None, alignment=None, 
         cell.font = font
 
 def hide_sheets(ab, ss):
+    # logger.info(f'Hiding sheets: {ss}')
     for s in ss:
         ab[s].sheet_state = 'hidden'
 
@@ -77,13 +89,16 @@ def find_last_row_in_col(sheet, col_index):
     :param col_index: The index of the column to search, starting from 1 for column A.
     :return: The row number of the last non-empty cell, or None if the column is empty.
     """
+
     # Openpyxl is 1-indexed, but using max_row directly as start makes the code clearer
     for row in range(sheet.max_row, 0, -1):
         if sheet.cell(row=row, column=col_index).value:
+            # logger.debug(f'Found last row equal to {row}')
             return row
     return None
 
 def load_excel(f):
+    #logger.info(f'Loading Excel file: {f}')
     ab1 = openpyxl.load_workbook(f)
     return ab1
 
@@ -118,67 +133,63 @@ def format_datetime(datetime_str):
 def create_concatenated_info(data_item):
     parts = []
 
-    payment_type = data_item.get('payment_type', '') # Retrieve payment type
-    if payment_type:
+    # Define a helper function to process and append parts
+    def append_part(key, prefix='', suffix='', remove_prefix=''):
+        '''
+        Input:
+            - key - key of data dictionary (from the JSON)
+            - prefix - desired prefix
+            - suffix - desired suffix
+            - remove_prefix - data to be removed.
+        '''
+
+        value = str(data_item.get(key, ''))
+        if value:
+            if remove_prefix:
+                value = value.lstrip(remove_prefix)
+            parts.append(f"{prefix}{value}{suffix}")
+
+
+    # Payment type
+    payment_type = data_item.get('payment_type', '').strip()
+
+    # Payment objective
+    payment_objective = data_item.get('payment_objective', '').strip()
+
+    # Add payment type only if it's not the same as payment objective
+    if payment_type and payment_type != payment_objective:
         parts.append(payment_type)
 
-    payment_objective = data_item.get('payment_objective', '') #Retrieve payment objective (Naznachenie)
+    # Add payment objective
     if payment_objective:
         parts.append(payment_objective)
 
-    schet_na_oplatu = data_item.get('schet_na_oplatu', '') # and etc
-    if schet_na_oplatu:
-        #match = re.search(r'\d+', schet_na_oplatu)
-        #if match:
-            #schet_na_oplatu = schet_na_oplatu[match.start():].strip()
-        parts.append(f"Счет на оплату №{schet_na_oplatu.lstrip('№')}")
+    # Schet na oplatu
+    append_part('schet_na_oplatu', prefix="Счет на оплату №", remove_prefix='№')
 
-    esf = data_item.get('esf', '')
-    if str(esf):
-        #match = re.search(r'\d+', esf)
-        #if match:
-            #esf = esf[match.start():].strip()
-        parts.append(f"ЭСФ №{esf.lstrip('№')}")
+    # ESF
+    append_part('esf', prefix="ЭСФ №", remove_prefix='№')
 
-    avr = data_item.get('avr', '') # Retrieve AVR
-    if str(avr):
-        #match = re.search(r'\d+', avr)
-        #if match:
-            #avr = avr[match.start():].strip()
-        parts.append(f"Акт выполненных работ №{avr.lstrip('№')}")
+    # AVR
+    append_part('avr', prefix="Акт выполненных работ №", remove_prefix='№')
 
-    akt_sverki = data_item.get('akt_sverki', '') # Retrieve Akt sverki
-    if str(akt_sverki):
-        #match = re.search(r'\d+', akt_sverki)
-        #if match:
-            #akt_sverki = akt_sverki[match.start():].strip()
-        parts.append(f"Акт сверки {akt_sverki.lstrip('№')}")
+    # Akt Sverki
+    append_part('akt_sverki', prefix="Акт сверки ", remove_prefix='№')
 
-    sz = data_item.get('sluzhebnaja_zapiska', '')
-    if str(sz):
-        # match = re.search(r'\d+', sz)
-        # if match:
-        #     sz = sz[match.start():].strip()
-        parts.append(f'Служебная записка {sz}')
+    # Sluzhebnaja zapiska
+    append_part('sluzhebnaja_zapiska', prefix='Служебная записка ')
 
-    avansovy_otchet = data_item.get('avansovy_otchet', '') # Retrieve Avansovy Otchet
-    if str(avansovy_otchet):
-        # match = re.search(r'\d+', avansovy_otchet)
-        # if match:
-        #     avansovy_otchet = avansovy_otchet[match.start():].strip()
-        parts.append(f"Авансовый отчет №{avansovy_otchet.lstrip('№')}")
+    # Avansovy otchet
+    append_part('avansovy_otchet', prefix="Авансовый отчет №", remove_prefix='№')
 
-    tru = data_item.get('TRU', '')
-    if tru:
-        parts.append(tru)
+    # TRU
+    append_part('TRU')
 
-    letter = data_item.get('letter', '')
-    if letter:
-        parts.append(f'Письмо {letter}')
+    # Letter
+    append_part('letter', prefix='Письмо ')
 
-    mediation = data_item.get('mediation', '')
-    if mediation:
-        parts.append(f"Медиация/Решение суда №{mediation.lstrip('№')}")
+    # Mediation
+    append_part('mediation', prefix="Медиация/Решение суда №", remove_prefix='№')
 
     nakladnye = data_item.get('nakladnye', '')
     if str(nakladnye):
@@ -188,15 +199,13 @@ def create_concatenated_info(data_item):
             parts.append(f"Накладные: {nakladnye}")
 
     sogl_o_rastor = data_item.get('sogl_o_rastor', '')
-    if str(sogl_o_rastor):
+    if str(sogl_o_rastor) and sogl_o_rastor != 'placeholder':
         match = re.search(r'\d+', sogl_o_rastor)
         if match:
             sogl_o_rastor = sogl_o_rastor[match.start():].strip()
             parts.append(f"Согл. о расторжении №{sogl_o_rastor.lstrip('№')}")
 
-    prilozhenije = data_item.get('prilozhenija', '')
-    if prilozhenije.lstrip('Приложение '):
-        parts.append(f'по приложению {prilozhenije}')
+    append_part('prilozhenija', prefix='по приложению ', remove_prefix='Приложение ')
 
     zusaetzliches_vertrag = data_item.get('zusaetzliches_vertrag', '')
     if zusaetzliches_vertrag != 'placeholder' and zusaetzliches_vertrag:
@@ -211,8 +220,9 @@ def create_concatenated_info(data_item):
             parts.append(f"Дог. {name_of_contract}")
 
     payment_number = data_item.get('payment_number', '')
+    doctype = data_item.get('doctype', '')
     if payment_number:
-        parts.append(f"Заявка на оплату №{payment_number}")
+        parts.append(f"{doctype} №{payment_number}")
     # Join all parts with ", " and remove trailing comma and space if any
     concatenated_info = ", ".join(parts).rstrip(", ")
 
@@ -240,21 +250,21 @@ def split_workbook(filename):
     filenames = [] # for the future filenames
     date_str = datetime.now().strftime('%d/%m/%Y_%H%M%S') # Format the current date
 
-    for sheet in workbook.sheetnames:
-        # if the sheet name is not in initial sheets
-        if sheet not in initial_sheets:
-            new_workbook = load_excel('template.xlsx')
-            new_workbook.remove(new_workbook.active)
-            new_workbook.add_sheet(workbook[sheet])
-            new_workbook.save(f'saves/{sheet}_{date_str}.xlsx')
-            filenames.append(f'saves/{sheet}_{date_str}.xlsx')
+    # for sheet in workbook.sheetnames:
+    #     # if the sheet name is not in initial sheets
+    #     if sheet not in initial_sheets:
+    #         new_workbook = load_excel('template.xlsx')
+    #         new_workbook.remove(new_workbook.active)
+    #         new_workbook.create_sheet(workbook[sheet])
+    #         new_workbook.save(f'saves/{sheet}_{date_str}.xlsx')
+    #         filenames.append(f'saves/{sheet}_{date_str}.xlsx')
 
     filename.rstrip('.xlsx') # Remove .xlsx from the filename
     zipname = f'zips/{filename}.zip'
     with zipfile.ZipFile(zipname, 'a') as zipf:
         for file in filenames:
             zipf.write(file)
-    
+
     # Delete the files after they are added to the zip
     for file in filenames:
         os.remove(file)
