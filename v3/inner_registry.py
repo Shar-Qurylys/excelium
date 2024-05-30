@@ -29,6 +29,7 @@ def add_coordinators(sheet):
         logging.info(f"The last non-empty cell in column {chr(64 + col_index)} of sheet '{sheet.title}' is in row {final_row}.")
     else:
         logging.info(f"No non-empty cells found in column {chr(64 + col_index)} of sheet '{sheet.title}'.")
+        final_row = 0 # happens never
 
     # Loop through the specified rows (8 times)
     for i in range(1,8):
@@ -65,6 +66,7 @@ def add_coordinators_v4(sheet):
         logging.info(f"The last non-empty cell in column {chr(64 + col_index)} of sheet '{sheet.title}' is in row {final_row}.")
     else:
         logging.info(f"No non-empty cells found in column {chr(64 + col_index)} of sheet '{sheet.title}'.")
+        final_row = 0 # never happens
 
     company = sheet['H11'].value # Get the company name from the sheet
     object_name = sheet['G11'].value # Get the object name from the sheet
@@ -72,12 +74,12 @@ def add_coordinators_v4(sheet):
 
     directors, coordinators_list = firmobj.check_company_object_pair(company, object_name) # Get the coordinators for the company and object
     if sheet['G17'].value.lower() == 'коммерческие расходы':
-        coordinators_list = [i for i in coordinators_list if i not in [4, 6]]
+        coordinators_list = [i for i in coordinators_list if i not in [4, 6]] # remove selected approvers in payments of commercial expenses
     else:
-        pass
+        pass # continue without changing
 
-    if sheet['H12'].value.lower() == 'заявка на налоги':
-        coordinators_list =firmobj.return_administration_approvers()
+    if sheet['H12'].value.lower() == 'заявка на налоги': # for tax related payments
+        coordinators_list =firmobj.return_administration_approvers() # approvers always correspond to List 1 approvers
 
     n = len(coordinators_list) # Get the number of coordinators
     logging.info(f'Company: {company}, Object: {object_name} Number of coordinators: {n}; coordinators: {coordinators_list}')
@@ -134,6 +136,7 @@ def loop_json(json_data, workbook):
                 # On dr JSON datei bekommn
 
                 workbook[object_name][f'H11'] = data[i]["organization"]
+                workbook[object_name][f'H12'] = data[i]["doctype"]
 
                 sides_str = f'Заявитель: {data[i]["organization"]}'+'\n\n'+f'Кому: {data[i]["counteragent"]}'
 
@@ -196,6 +199,5 @@ def format_excel_inner(json_data):
             add_colontituls(workbook[sheet])
         else:
             continue
-
 
     return workbook
