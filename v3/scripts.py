@@ -5,6 +5,10 @@ from datetime import datetime
 import zipfile
 import os
 import re
+from transliterate import translit
+import kazakh_translit
+from urllib.parse import quote, unquote
+
 # import logging
 
 # logging.basicConfig(
@@ -95,7 +99,7 @@ def find_last_row_in_col(sheet, col_index):
         if sheet.cell(row=row, column=col_index).value:
             # logger.debug(f'Found last row equal to {row}')
             return row
-    return None
+    return None # catastrophic failure.
 
 def load_excel(f):
     #logger.info(f'Loading Excel file: {f}')
@@ -235,6 +239,41 @@ def add_colontituls(sheet):
 def set_print_area(sheet):
     last_row = find_last_row_in_col(sheet,6)
     sheet.print_area = f'F1:I{last_row}'
+
+def retrieve_useful_data(data):
+    '''
+    this function is used to retrieve the following info from the contents
+    of JSON. For instance: Doctype, Organization,
+    '''
+
+    unique_organizations = set()
+    unique_doctypes = set()
+    unique_payment_types = set()
+
+    data_converted = data.get('request', [])
+
+    def transliterated():
+        translatedOrgs = [translit(org, 'kz', reversed=True) for org in unique_organizations if org]
+        translatedDocs = [translit(doc, 'kz', reversed=True) for doc in unique_doctypes if doc]
+        translatedTypes = [translit(type, 'kz', reversed=True) for type in unique_payment_types if type]
+
+        return translatedOrgs, translatedDocs, translatedTypes
+
+    for entry in data_converted:
+        unique_organizations.add(entry.get('organization'))
+        unique_doctypes.add(entry.get('doctype'))
+        unique_payment_types.add(entry.get('payment_type'))
+
+    return transliterated()
+
+def encode_filename(filename, encode=False):
+
+    if encode:
+        filename = quote(filename)
+    else:
+        filename = unquote(filename)
+
+    return filename
 
 def split_workbook(filename):
     '''
