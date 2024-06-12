@@ -84,7 +84,7 @@ def add_coordinators_v4(sheet):
     n = len(coordinators_list) # Get the number of coordinators
     logging.info(f'Company: {company}, Object: {object_name} Number of coordinators: {n}; coordinators: {coordinators_list}')
     for i in range(1,n+1):
-        formula_b = f'=INDEX(СПР_ОБЪЕКТОВ!$B$7:$K$80, MATCH($G11, СПР_ОБЪЕКТОВ!$B$7:$B$80, 0), {3 + i})'
+        #formula_b = f'=INDEX(СПР_ОБЪЕКТОВ!$B$7:$K$80, MATCH($G11, СПР_ОБЪЕКТОВ!$B$7:$B$80, 0), {3 + i})'
         row = final_row + i * 3
 
         if coordinators_list[i-1] != 3:
