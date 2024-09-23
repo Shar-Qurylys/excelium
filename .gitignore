@@ -1,0 +1,8 @@
+__pycache__
+models/__pycache__
+routes/__pycache__
+tests/__pycache__
+utils/__pycache__
+utils/firmen_und_objekte.py
+.DS_Store
+excel_templates
