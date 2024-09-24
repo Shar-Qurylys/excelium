@@ -18,21 +18,7 @@ from routes.route_outer_registry import outer_registry_bp
 app.register_blueprint(inner_registry_bp)
 app.register_blueprint(outer_registry_bp) 
 
-# Stage 3: Access
-
-@app.route('/get-url', methods=['GET'])
-def get_url():
-    # Get the host and port dynamically
-    host = request.host_url  # This gives the full host URL including scheme, hostname, and port
-
-    # Example response with the dynamic URL
-    return jsonify({
-        "host_url": host,
-        "example_endpoint_url": url_for('get_url', _external=True)  # Dynamically get URL for this endpoint
-    })
-
 # Create a route for serving saved files
-
 
 @app.route('/saves/<filename>', methods = ['GET'])
 def download_file(filename):
