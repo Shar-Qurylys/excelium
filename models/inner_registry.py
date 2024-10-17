@@ -33,10 +33,10 @@ def add_coordinators_v4(sheet):
     doctype = sheet['H12'].value
 
     directors, coordinators_list = firmobj.check_company_object_pair(company, object_name) # Get the coordinators for the company and object
-    if sheet['G17'].value.lower() == 'коммерческие расходы':
-        coordinators_list = [i for i in coordinators_list if i not in [4, 6]] # remove selected approvers in payments of commercial expenses
-    else:
-        pass # continue without changing
+    # if sheet['G17'].value.lower() == 'коммерческие расходы':
+    #     coordinators_list = [i for i in coordinators_list if i not in [4, 6]] # remove selected approvers in payments of commercial expenses
+    # else:
+    #     pass # continue without changing
 
     # Turned off
     # if sheet['H12'].value.lower() == 'заявка на налоги': # for tax related payments
@@ -145,13 +145,13 @@ def format_excel_inner(json_data):
     workbook = load_excel('excel_templates/template.xlsx')
     initial_sheets = ['REESTR', 'СПР_ОБЪЕКТОВ', 'СПР_ПОДПИСАНТОВ']
 
+    logging.info('Reading JSON file')
+    loop_json(json_data, workbook)
+
     logging.info('Removing REESTR sheet')
     if 'REESTR' in workbook.sheetnames:
         reestr_sheet = workbook['REESTR']
         workbook.remove(reestr_sheet)
-
-    logging.info('Reading JSON file')
-    loop_json(json_data, workbook)
 
     # Update the initial_sheets list after removing REESTR
     initial_sheets.remove('REESTR')
