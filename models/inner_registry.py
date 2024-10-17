@@ -145,8 +145,17 @@ def format_excel_inner(json_data):
     workbook = load_excel('excel_templates/template.xlsx')
     initial_sheets = ['REESTR', 'СПР_ОБЪЕКТОВ', 'СПР_ПОДПИСАНТОВ']
 
+    logging.info('Removing REESTR sheet')
+    if 'REESTR' in workbook.sheetnames:
+        reestr_sheet = workbook['REESTR']
+        workbook.remove(reestr_sheet)
+
     logging.info('Reading JSON file')
     loop_json(json_data, workbook)
+
+    # Update the initial_sheets list after removing REESTR
+    initial_sheets.remove('REESTR')
+    
     hide_sheets(workbook, initial_sheets)
     for sheet in workbook.sheetnames:
         if sheet not in initial_sheets:
