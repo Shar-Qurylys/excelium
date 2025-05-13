@@ -41,7 +41,7 @@ def fill_priority_registry(json_data):
             sheet[f"B{row}"] = e["payment_number"]
             sheet[f"C{row}"] = e["status"]
             sheet[f"D{row}"] = e["counteragent"]
-            sheet[f"E{row}"] = float(e["sum"])
+            sheet[f"E{row}"] = float(e["payment_sum"])
             sheet[f"F{row}"] = e["TRU"]
             sheet[f"G{row}"] = e["object_name"]
             total += float(e["sum"])
