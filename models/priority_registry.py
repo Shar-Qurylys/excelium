@@ -16,9 +16,11 @@ def fill_priority_registry(json_data):
     tpl = workbook["REESTR"]    # ← make sure your xlsx has a sheet with exactly this name
 
     # 2) group entries by object_name
-    groups = defaultdict(list)
-    for entry in json_data:
-        obj = entry["object_name"]
+    entries = json_data.get('request', [])
+
+    groups: dict[str, list] = defaultdict(list) 
+    for entry in entries:
+        obj = str(entry.get('object_name', 'Без объекта'))
         groups[obj].append(entry)
 
     # 3) for each object, copy+fill
@@ -51,9 +53,9 @@ def fill_priority_registry(json_data):
         sheet[f"E{total_row}"] = total
 
         sheet[f"B{total_row + 2}"] = "Начальник ПТО"
-        sheet[f"C{total_row + 2}"] = json_data.get("pto","")
+        sheet[f"C{total_row + 2}"] = "___________________   Королькова Е. В."
         sheet[f"B{total_row + 4}"] = "Исполнительный директор:"
-        sheet[f"C{total_row + 4}"] = json_data.get("director","")
+        sheet[f"C{total_row + 4}"] = "___________________   Сергачев П.А."
 
     # 4) remove the original template so it doesn’t show up as an empty sheet
     workbook.remove(tpl)
