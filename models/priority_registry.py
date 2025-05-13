@@ -7,6 +7,8 @@ from collections import defaultdict
 from utils.scripts import (
     load_excel,
     format_row_priority_registry,
+    set_print_area_priority_registry,
+    add_colontituls
 )
 import logging
 
@@ -55,16 +57,20 @@ def fill_priority_registry(json_data):
         sheet[f"E{total_row}"].font = font
 
         sheet[f"B{total_row + 2}"] = "Начальник ПТО"
-        sheet[f"C{total_row + 2}"] = "___________________   Королькова Е. В."
+        sheet[f"D{total_row + 2}"] = "___________________   Королькова Е. В."
         sheet[f"B{total_row + 4}"] = "Исполнительный директор"
-        sheet[f"C{total_row + 4}"] = "___________________   Сергачев П.А."
+        sheet[f"D{total_row + 4}"] = "___________________   Сергачев П.А."
 
         sheet[f"B{total_row + 2}"].font = font
-        sheet[f"C{total_row + 2}"].font = font 
+        sheet[f"D{total_row + 2}"].font = font 
         sheet[f"B{total_row + 4}"].font = font 
-        sheet[f"C{total_row + 4}"].font = font
+        sheet[f"D{total_row + 4}"].font = font
 
     # 4) remove the original template so it doesn’t show up as an empty sheet
     workbook.remove(tpl)
+
+    for sheet in workbook.sheetnames:
+        set_print_area_priority_registry(workbook[sheet])
+        add_colontituls(workbook[sheet])
 
     return workbook

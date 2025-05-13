@@ -244,6 +244,10 @@ def set_print_area(sheet):
     last_row = find_last_row_in_col(sheet,6)
     sheet.print_area = f'F1:I{last_row}'
 
+def set_print_area_priority_registry(sheet):
+    last_row = find_last_row_in_col(sheet,2) # B column
+    sheet.print_area = f'A1:I{last_row}'
+
 def split_workbook(filename):
     '''
     This function splits the workbook into separate files and then zips them
