@@ -33,14 +33,16 @@ def add_coordinators_v4(sheet):
     doctype = sheet['H12'].value
 
     directors, coordinators_list = firmobj.check_company_object_pair(company, object_name) # Get the coordinators for the company and object
-    # if sheet['G17'].value.lower() == 'коммерческие расходы':
-    #     coordinators_list = [i for i in coordinators_list if i not in [4, 6]] # remove selected approvers in payments of commercial expenses
-    # else:
-    #     pass # continue without changing
+    specified_types = ['коммерческие расходы', 'зарплата', 'налоги']
+    if sheet['G17'].value.lower() in specified_types:
+        coordinators_list = [i for i in coordinators_list if i not in [4, 6]] # remove selected approvers in payments of commercial expenses
+    else:
+        pass # continue without changing
 
     # Turned off
     # if sheet['H12'].value.lower() == 'заявка на налоги': # for tax related payments
     #     coordinators_list =firmobj.return_administration_approvers() # approvers always correspond to List 1 approvers
+    # TODO: remove head of PTO from approval of salary. code of PTO: 6
 
     n = len(coordinators_list) # Get the number of coordinators
     logging.info(f'Company: {company}, Object: {object_name} Number of coordinators: {n}; coordinators: {coordinators_list}')
