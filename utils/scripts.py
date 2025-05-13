@@ -28,7 +28,7 @@ def format_row(sheet, row_number, columns):
                           end_color='FFFF00',
                           fill_type='solid')
     # Set the row height
-    sheet.row_dimensions[row_number].height = 100 # turned off
+    sheet.row_dimensions[row_number].height = 100
 
     # Apply formatting to each cell in the row
     for col in columns:
@@ -37,6 +37,29 @@ def format_row(sheet, row_number, columns):
         cell.border = border
         cell.alignment = alignment
         sheet[f'F{row_number}'].alignment = Alignment(horizontal='left', wrapText=True)
+
+def format_row_priority_registry(sheet, row_number, columns):
+    # Define the font, border, and alignment
+    font = Font(name='Arial', size=12)
+
+    #set thin border
+    border = set_border('thin')
+
+    alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    # Create a fill object with yellow color
+    yellow_fill = PatternFill(start_color='FFFF00',
+                          end_color='FFFF00',
+                          fill_type='solid')
+    # Set the row height
+    sheet.row_dimensions[row_number].height = 75
+
+    # Apply formatting to each cell in the row
+    for col in columns:
+        cell = sheet[f'{col}{row_number}']
+        cell.font = font
+        cell.border = border
+        cell.alignment = alignment
 
 def set_cell_properties(sheet, row, column, value, border=None, alignment=None, font=None):
     '''
