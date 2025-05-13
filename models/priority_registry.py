@@ -17,7 +17,7 @@ def fill_priority_registry(json_data):
 
     # 2) group entries by object_name
     groups = defaultdict(list)
-    for entry in json_data["entries"]:
+    for entry in json_data:
         obj = entry["object_name"]
         groups[obj].append(entry)
 
