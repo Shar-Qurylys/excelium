@@ -14,9 +14,11 @@ CORS(app)
 # Stage 2: Import the blueprints
 from routes.route_inner_registry import inner_registry_bp
 from routes.route_outer_registry import outer_registry_bp
+from routes.route_priority_registry import priority_registry_bp
 
 app.register_blueprint(inner_registry_bp)
 app.register_blueprint(outer_registry_bp) 
+app.register_blueprint(priority_registry_bp)
 
 # Create a route for serving saved files
 
