@@ -5,6 +5,8 @@ from datetime import datetime
 import zipfile
 import os
 import re
+from dataclasses import dataclass
+from typing import Optional
 
 
 def set_border(style):
@@ -138,103 +140,111 @@ def format_datetime(datetime_str):
         return datetime_str
 
 
-def create_concatenated_info(data_item):
+# ============================================================================
+# Field Configuration for JSON Parsing
+# ============================================================================
+
+@dataclass
+class FieldDef:
+    """Definition for a JSON field to be included in concatenated info."""
+    key: str                          # JSON key name
+    prefix: str = ''                  # Text prefix to add
+    suffix: str = ''                  # Text suffix to add  
+    strip_prefix: str = ''            # Text to strip from the start
+    placeholder: Optional[str] = None # Value to exclude (e.g., 'placeholder')
+    extract_numbers: bool = False     # Use regex to extract numbers first
+
+# Data-driven field configuration - easy to add/modify/remove fields
+FIELD_CONFIG = [
+    FieldDef(key='schet_na_oplatu', prefix='Счет на оплату №', strip_prefix='№'),
+    FieldDef(key='esf', prefix='ЭСФ №', strip_prefix='№'),
+    FieldDef(key='avr', prefix='Акт выполненных работ №', strip_prefix='№'),
+    FieldDef(key='akt_sverki', prefix='Акт сверки ', strip_prefix='№'),
+    FieldDef(key='sluzhebnaja_zapiska', prefix='Служебная записка '),
+    FieldDef(key='avansovy_otchet', prefix='Авансовый отчет №', strip_prefix='№'),
+    FieldDef(key='TRU'),
+    FieldDef(key='letter', prefix='Письмо '),
+    FieldDef(key='mediation', prefix='Медиация/Решение суда №', strip_prefix='№'),
+    FieldDef(key='nakladnye', prefix='Накладные: ', extract_numbers=True),
+    FieldDef(key='sogl_o_rastor', prefix='Согл. о расторжении №', strip_prefix='№', 
+             placeholder='placeholder', extract_numbers=True),
+    FieldDef(key='prilozhenija', prefix='по приложению ', strip_prefix='Приложение '),
+]
+
+
+def _process_field(data_item: dict, field: FieldDef) -> Optional[str]:
+    """Process a single field according to its definition."""
+    value = data_item.get(field.key, '')
+    if not value:
+        return None
+    
+    value = str(value).strip()
+    
+    # Skip placeholder values
+    if field.placeholder and value == field.placeholder:
+        return None
+    
+    # Extract numbers if required
+    if field.extract_numbers:
+        match = re.search(r'\d+', value)
+        if not match:
+            return None
+        value = value[match.start():].strip()
+    
+    # Strip prefix if specified
+    if field.strip_prefix:
+        value = value.lstrip(field.strip_prefix)
+    
+    if not value:
+        return None
+    
+    return f"{field.prefix}{value}{field.suffix}"
+
+
+def create_concatenated_info(data_item: dict) -> str:
+    """
+    Creates a concatenated string of payment information from JSON data.
+    
+    Uses FIELD_CONFIG for data-driven field processing. Special handling
+    for payment_type, payment_objective, contract info, and payment number.
+    """
     parts = []
-
-    # Define a helper function to process and append parts
-    def append_part(key, prefix='', suffix='', remove_prefix=''):
-        '''
-        Input:
-            - key - key of data dictionary (from the JSON)
-            - prefix - desired prefix
-            - suffix - desired suffix
-            - remove_prefix - data to be removed.
-        '''
-
-        value = str(data_item.get(key, ''))
-        if value:
-            if remove_prefix:
-                value = value.lstrip(remove_prefix)
-            parts.append(f"{prefix}{value}{suffix}")
-
-
-    # Payment type
+    
+    # Special handling: payment_type and payment_objective
     payment_type = data_item.get('payment_type', '').strip()
-
-    # Payment objective
     payment_objective = data_item.get('payment_objective', '').strip()
-
-    # Add payment type only if it's not the same as payment objective
+    
+    # Add payment type only if different from objective
     if payment_type and payment_type != payment_objective:
         parts.append(payment_type)
-
-    # Add payment objective
+    
     if payment_objective:
         parts.append(payment_objective)
-
-    # Schet na oplatu
-    append_part('schet_na_oplatu', prefix="Счет на оплату №", remove_prefix='№')
-
-    # ESF
-    append_part('esf', prefix="ЭСФ №", remove_prefix='№')
-
-    # AVR
-    append_part('avr', prefix="Акт выполненных работ №", remove_prefix='№')
-
-    # Akt Sverki
-    append_part('akt_sverki', prefix="Акт сверки ", remove_prefix='№')
-
-    # Sluzhebnaja zapiska
-    append_part('sluzhebnaja_zapiska', prefix='Служебная записка ')
-
-    # Avansovy otchet
-    append_part('avansovy_otchet', prefix="Авансовый отчет №", remove_prefix='№')
-
-    # TRU
-    append_part('TRU')
-
-    # Letter
-    append_part('letter', prefix='Письмо ')
-
-    # Mediation
-    append_part('mediation', prefix="Медиация/Решение суда №", remove_prefix='№')
-
-    nakladnye = data_item.get('nakladnye', '')
-    if str(nakladnye):
-        match = re.search(r'\d+', nakladnye)
-        if match:
-            nakladnye = nakladnye[match.start():].strip()
-            parts.append(f"Накладные: {nakladnye}")
-
-    sogl_o_rastor = data_item.get('sogl_o_rastor', '')
-    if str(sogl_o_rastor) and sogl_o_rastor != 'placeholder':
-        match = re.search(r'\d+', sogl_o_rastor)
-        if match:
-            sogl_o_rastor = sogl_o_rastor[match.start():].strip()
-            parts.append(f"Согл. о расторжении №{sogl_o_rastor.lstrip('№')}")
-
-    append_part('prilozhenija', prefix='по приложению ', remove_prefix='Приложение ')
-
+    
+    # Process all configured fields
+    for field in FIELD_CONFIG:
+        result = _process_field(data_item, field)
+        if result:
+            parts.append(result)
+    
+    # Special handling: zusaetzliches_vertrag / contract
     zusaetzliches_vertrag = data_item.get('zusaetzliches_vertrag', '')
-    if zusaetzliches_vertrag != 'placeholder' and zusaetzliches_vertrag:
-        zv_text = f'{zusaetzliches_vertrag}'.lstrip('Доп. соглашение')
+    if zusaetzliches_vertrag and zusaetzliches_vertrag != 'placeholder':
+        zv_text = str(zusaetzliches_vertrag).lstrip('Доп. соглашение')
         parts.append(f'ДС {zv_text}')
     else:
         name_of_contract = data_item.get('name_of_contract', '')
-        date_of_contract = data_item.get('date_of_contract', '') # to be deleted
-
+        date_of_contract = data_item.get('date_of_contract', '')
         if name_of_contract and date_of_contract:
-            formatted_date = format_datetime(date_of_contract) # to be deleted
             parts.append(f"Дог. {name_of_contract}")
-
+    
+    # Special handling: payment_number
     payment_number = data_item.get('payment_number', '')
     doctype = data_item.get('doctype', '')
     if payment_number:
         parts.append(f"{doctype} №{payment_number}")
-    # Join all parts with ", " and remove trailing comma and space if any
-    concatenated_info = ", ".join(parts).rstrip(", ")
-
-    return concatenated_info
+    
+    return ", ".join(parts).rstrip(", ")
 
 def add_colontituls(sheet):
     sheet.oddFooter.left.text = "Группа компаний «Шар Құрылыс»" # Left footer

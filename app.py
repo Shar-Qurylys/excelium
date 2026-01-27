@@ -39,6 +39,6 @@ def download_file(filename):
     return send_from_directory(directory, filename, as_attachment=True)
 
 if __name__ == '__main__':
-    app.run(debug=False, port=25351, host = '192.168.30.19')
-    # app.run(debug=False, port=25351, host = '127.0.0.1')
+    # app.run(debug=False, port=25351, host = '192.168.30.19')
+    app.run(debug=False, port=25351, host = '127.0.0.1')
     logging.basicConfig(level=logging.INFO)

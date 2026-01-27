@@ -68,78 +68,73 @@ def add_coordinators_v4(sheet):
 
 def loop_json(json_data, workbook):
     '''
-    This function works with the loaded json and with the copied workbook
+    This function works with the loaded json and with the copied workbook.
+    Groups entries by (organization, object_name) pairs so each company 
+    gets its own sheet per object.
     '''
+    from collections import defaultdict
+    
     cols = ['F', 'G', 'H', 'I']
+    
     for key_title, data in json_data.items():
-
-        print(len(data)) #how many documents are fetched
-        sub = 0 # sub-nomer reestra
-        for i in range(len(data)):
-            if data[i]['object_name'] not in workbook.sheetnames:
-                sub += 1
-
-                start_row = 17 # starting row for the writing
+        print(f"Processing {len(data)} documents")
+        
+        # Group entries by (company, object) pairs
+        groups = defaultdict(list)
+        for item in data:
+            key = (item.get('organization', ''), item.get('object_name', ''))
+            groups[key].append(item)
+        
+        # Create company number mapping for sheet naming
+        unique_companies = sorted(set(company for company, obj in groups.keys()))
+        company_numbers = {company: idx + 1 for idx, company in enumerate(unique_companies)}
+        
+        sub = 0  # sub-nomer reestra
+        
+        for (company, object_name), entries in groups.items():
+            sub += 1
+            
+            # Create sheet name using company number (to fit Excel's 31-char limit)
+            company_num = company_numbers[company]
+            # Format: "C{num}_{object_name}" - e.g., "C1_Администрация"
+            sheet_title = f"C{company_num}_{object_name}"
+            if len(sheet_title) > 31:
+                sheet_title = sheet_title[:31]
+            
+            # Create a copy of the source sheet
+            source_sheet = workbook['REESTR']
+            new_sheet = workbook.copy_worksheet(source_sheet)
+            new_sheet.title = sheet_title
+            
+            # Set sheet metadata
+            workbook[sheet_title]['G11'] = object_name
+            workbook[sheet_title]['G10'] = datetime.today()
+            registry_name = entries[0].get('registry_name', '')
+            workbook[sheet_title]['F7'] = f'{registry_name}/{sub}'
+            
+            # Store company info for coordinators (H11, H12 are used by add_coordinators_v4)
+            workbook[sheet_title]['H11'] = company
+            workbook[sheet_title]['H12'] = entries[0].get('doctype', '')
+            
+            # Write all entries for this (company, object) group
+            start_row = 17
+            for entry in entries:
                 row = start_row
-                source_sheet = workbook['REESTR']
-
-                # Create a copy of the source sheet with the desired name
-                new_sheet = workbook.copy_worksheet(source_sheet)
-
-                #listname feststelln
-                new_sheet.title = data[i]['object_name']
-
-                #objektname speichern
-                object_name = data[i]['object_name']
-                workbook[object_name][f'G11'] = object_name
-                workbook[object_name][f'G10'] = datetime.today()
-                registry_name = data[i]['registry_name']
-                workbook[object_name][f'F7'] = f'{registry_name}/{sub}'
-
-                # On dr JSON datei bekommn
-
-                workbook[object_name][f'H11'] = data[i]["organization"]
-                workbook[object_name][f'H12'] = data[i]["doctype"]
-
-                sides_str = f'Заявитель: {data[i]["organization"]}'+'\n\n'+f'Кому: {data[i]["counteragent"]}'
-
-                workbook[object_name][f'F{row}'] = sides_str
-
-                workbook[object_name][f'G{row}'] = data[i]['zatraty'] # Zatraty po DDS
-
-                workbook[object_name][f'H{row}'] = float(data[i]['payment_sum']) # Gebuhr
-
-                i_cell_str = create_concatenated_info(data[i])
-
-                workbook[object_name][f'I{row}'] = i_cell_str
-
-                #Zeile formatieren
-                format_row(workbook[object_name], row, cols)
-                workbook[object_name][f'F{row}'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-
-                start_row += 1
-            else:
-                # test
-                row = start_row
-                object_name = data[i]['object_name']
-
-                sides_str = f'Заявитель: {data[i]["organization"]}'+'\n\n'+f'Кому: {data[i]["counteragent"]}'
-
-                workbook[object_name][f'F{row}'] = sides_str
-
-                workbook[object_name][f'G{row}'] = data[i]['zatraty'] # Zatraty po DDS
-
-                workbook[object_name][f'H{row}'] = float(data[i]['payment_sum']) # Gebuhr
-
-                #workbook[object_name][f'M{row}'] = data[i]['sluzhebnaja_zapiska'] # Objektname
-
-                i_cell_str = create_concatenated_info(data[i])
-                workbook[object_name][f'I{row}'] = i_cell_str
-
-                #Zeile formatieren
-                format_row(workbook[object_name], row, cols)
-                workbook[object_name][f'F{row}'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-
+                
+                sides_str = f'Заявитель: {entry["organization"]}' + '\n\n' + f'Кому: {entry["counteragent"]}'
+                workbook[sheet_title][f'F{row}'] = sides_str
+                workbook[sheet_title][f'G{row}'] = entry.get('zatraty', '')
+                workbook[sheet_title][f'H{row}'] = float(entry.get('payment_sum', 0))
+                
+                i_cell_str = create_concatenated_info(entry)
+                workbook[sheet_title][f'I{row}'] = i_cell_str
+                
+                # Format the row
+                format_row(workbook[sheet_title], row, cols)
+                workbook[sheet_title][f'F{row}'].alignment = Alignment(
+                    horizontal='left', vertical='center', wrap_text=True
+                )
+                
                 start_row += 1
 
 def format_excel_inner(json_data):
