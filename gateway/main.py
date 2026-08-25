@@ -6,11 +6,13 @@ import logging
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from .config import Settings
 from .filestore.store import FileStore
 from .jobsqueue.db import init_db
 from .logging_setup import setup_logging
-from .routers import files
+from .config import APP_DIR, Settings
+from .renderers.approvers import ApproverMatrix
+from .renderers.registry_outer import load_banks
+from .routers import files, render
 from .security import SecurityMiddleware
 
 log = logging.getLogger(__name__)
@@ -27,6 +29,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         init_db(settings.db_path)
         app.state.settings = settings
         app.state.filestore = FileStore(settings)
+        app.state.approvers = ApproverMatrix(APP_DIR / "data" / "approvers.yaml")
+        app.state.banks = load_banks(APP_DIR / "data" / "banks.yaml")
+        app.state.template_inner = APP_DIR / "templates" / "excel" / "template.xlsx"
+        app.state.template_outer = APP_DIR / "templates" / "excel" / "template_outer.xlsx"
+        app.state.template_priority = APP_DIR / "templates" / "excel" / "template_priority_registry.xlsx"
         task = asyncio.create_task(_sweep_loop(app))
         log.info("gateway started")
         yield
@@ -37,6 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Doc-V Gateway", lifespan=lifespan)
     app.add_middleware(SecurityMiddleware, settings=settings)
     app.include_router(files.router)
+    app.include_router(render.router)
 
     @app.get("/health")
     def health():
