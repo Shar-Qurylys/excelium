@@ -29,7 +29,7 @@ curl http://192.168.30.19:25353/health
 
 ```
 cd ~/Documents/docv-gateway && git pull
-venv/bin/pip install -r requirements.txt
+
 sudo systemctl restart docv-gateway
 ```
 
@@ -53,5 +53,9 @@ sudo systemctl restart docv-gateway
 `http://192.168.30.19:25353/ui` — обзор (статусы, audit-лента), очередь
 заданий, ручной запуск операций, хранилище файлов, тестовый рендер
 реестров и Typst. Вход по GW_TOKEN_ADMIN (пустой токен = интерфейс
-выключен). Машина администратора должна попадать в GW_ALLOWLIST —
-allowlist принимает и подсети («192.168.30.0/24»).
+выключен).
+
+IP-доступ двумя списками: GW_ALLOWLIST — API, только сервер Doc-V;
+GW_UI_ALLOWLIST — дополнительно /ui, /health и /files/* для машин
+администраторов (оба принимают подсети, «192.168.30.0/24»). Машина из
+GW_UI_ALLOWLIST не достаёт до API даже с валидным токеном.

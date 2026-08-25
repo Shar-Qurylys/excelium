@@ -51,7 +51,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.settings = settings
         self.window = _Window()
-        self.networks = _parse_allowlist(settings.allowlist)
+        self.api_allowed = _parse_allowlist(settings.allowlist)
+        self.ui_allowed = _parse_allowlist(settings.allowlist + settings.ui_allowlist)
 
     async def dispatch(self, request: Request, call_next):
         s = self.settings
@@ -59,7 +60,11 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         method = request.method
 
-        if not _ip_allowed(ip, self.networks):
+        # Интерфейс, health и выдача файлов доступны и машинам из
+        # ui_allowlist (браузеры администраторов); API — только allowlist.
+        ui_path = (path == "/ui" or path.startswith("/ui/") or path == "/health"
+                   or path == "/favicon.ico" or path.startswith("/files/"))
+        if not _ip_allowed(ip, self.ui_allowed if ui_path else self.api_allowed):
             audit_log("deny_ip", ip=ip, path=path)
             return _FORBIDDEN
 

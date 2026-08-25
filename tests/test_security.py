@@ -36,3 +36,22 @@ def test_ops_rate_limit(client):
 def test_empty_request_rejected(client):
     r = client.post("/render/registry/inner", json={"request": []}, headers=docv_headers())
     assert r.status_code == 422
+
+
+def test_ui_allowlist_opens_ui_but_not_api(settings):
+    """Машина из ui_allowlist видит /ui, /health и /files, но не API."""
+    s = settings.model_copy(update={"allowlist": ["10.0.0.1"],
+                                    "ui_allowlist": ["testclient"]})
+    app = create_app(s)
+    with TestClient(app) as c:
+        assert c.get("/health").status_code == 200
+        assert c.get("/ui/login").status_code == 200
+        assert c.get("/files/" + "a" * 24).status_code == 404  # IP прошёл, токена нет
+        r = c.post("/render/registry/inner", json={"request": [{}]},
+                   headers=docv_headers())
+        assert r.status_code == 403  # API из ui_allowlist закрыт
+
+
+def test_api_allowlist_still_covers_ui(client):
+    """Сервер Doc-V (allowlist) при желании тоже открывает /ui."""
+    assert client.get("/ui/login").status_code == 200

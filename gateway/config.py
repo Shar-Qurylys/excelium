@@ -11,8 +11,12 @@ class Settings(BaseSettings):
         env_prefix="GW_", env_file=APP_DIR / ".env", env_file_encoding="utf-8"
     )
 
-    # Безопасность
+    # Безопасность. allowlist — API (сервер Doc-V и продюсеры);
+    # ui_allowlist — ДОПОЛНИТЕЛЬНО для /ui, /health и /files/*
+    # (машины администраторов, офисная подсеть). Оба принимают
+    # адреса и подсети (CIDR).
     allowlist: list[str] = ["192.168.30.29", "127.0.0.1", "::1"]
+    ui_allowlist: list[str] = []
     token_docv: str = ""
     token_ops: str = ""
     token_admin: str = ""  # вход в веб-интерфейс /ui
