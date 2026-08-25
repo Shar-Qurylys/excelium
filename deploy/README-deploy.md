@@ -1,0 +1,49 @@
+# Развёртывание Doc-V Gateway
+
+Сервер: 192.168.30.19, пользователь radmin, порт 25353.
+Старый сервис (excelium.service, порт 25351) не трогается до полного перевода
+действий Doc-V — см. план (вехи M2/M6).
+
+## Первая установка
+
+```
+ssh radmin@192.168.30.19
+git clone <repo> ~/Documents/docv-gateway && cd ~/Documents/docv-gateway
+python3.11 -m venv venv
+venv/bin/pip install -r requirements.txt
+cp .env.example .env && chmod 600 .env   # заполнить токены!
+sudo cp deploy/docv-gateway.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now docv-gateway
+```
+
+Проверка с сервера Doc-V (192.168.30.29) — заодно проверяет IP-allowlist:
+
+```
+curl http://192.168.30.19:25353/health
+```
+
+С любой другой машины тот же запрос обязан вернуть 403.
+
+## Обновление
+
+```
+cd ~/Documents/docv-gateway && git pull
+venv/bin/pip install -r requirements.txt
+sudo systemctl restart docv-gateway
+```
+
+## Что нужно для отдельных модулей
+
+- /render/typst — бинарь `typst` в PATH (https://typst.app, `cargo install typst-cli`
+  или готовый релиз). Без него endpoint отвечает 503.
+- /ops xlsx_to_pdf — libreoffice (`apt install libreoffice-calc --no-install-recommends`).
+- /ops restart_unit — строка в sudoers (через `visudo`):
+  `radmin ALL=(root) NOPASSWD: /usr/bin/systemctl restart docv-server.service`
+
+## Секреты
+
+Токены генерируются `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`.
+Значение GW_TOKEN_DOCV дублируется в Doc-V: карточка НАСТРОЙКИ, setting-поле с
+токеном; действия «HTTP-запрос» подставляют его в заголовок Authorization из поля.
+Ротация: поменять в .env, перезапустить юнит, поменять в НАСТРОЙКИ.

@@ -1,0 +1,15 @@
+[Unit]
+Description = Doc-V Gateway (registries, Typst, ops, jobs) for Shar-Qurylys
+After = network.target
+
+[Service]
+User=radmin
+Group=www-data
+WorkingDirectory=/home/radmin/Documents/docv-gateway
+EnvironmentFile=/home/radmin/Documents/docv-gateway/.env
+ExecStart=/home/radmin/Documents/docv-gateway/venv/bin/uvicorn gateway.main:app --host 192.168.30.19 --port 25353 --workers 2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

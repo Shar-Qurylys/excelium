@@ -1,0 +1,434 @@
+# Матрица подписантов реестров платежей.
+#
+# Конвертирована из utils/firmen_und_objekte.py (слепок листа
+# СПР_ПОДПИСАНТОВ от 2024-05-29); попутно исправлена опечатка
+# «TOO» латиницей у пары BestStroy / Grand Victoria 3.
+#
+# Устройство:
+#   approver_lists — именованные списки согласующих. Число — ID строки
+#     на листе СПР_ПОДПИСАНТОВ шаблона template.xlsx: Excel сам
+#     подставляет ФИО и должность через VLOOKUP. Порядок в списке =
+#     порядок подписей под реестром. ID 3 — особый: перед ним пишется
+#     строка «СОГЛАСОВАНО» (см. renderers/registry_inner.py).
+#   rules — правило на компанию: список объектов, два директора сверху
+#     реестра (ID, 0 = места нет) и имя списка согласующих.
+#   company_fallbacks — если пара компания+объект не найдена, ищется
+#     компания целиком.
+#   expense_type_exclusions — для перечисленных видов затрат эти ID
+#     исключаются из списка согласующих.
+#
+# Неизвестная компания/объект = реестр без подписей + warning в логе.
+# После миграции согласующих в справочники Doc-V (веха M8) файл уйдёт.
+approver_lists:
+  list_1:
+  - 2
+  - 48
+  - 5
+  - 7
+  - 8
+  - 17
+  - 49
+  list_2:
+  - 2
+  - 5
+  - 6
+  - 7
+  - 8
+  - 17
+  - 49
+  - 3
+  list_3:
+  - 2
+  - 48
+  - 5
+  - 6
+  - 7
+  - 8
+  - 17
+  - 49
+  list_4:
+  - 2
+  - 48
+  - 5
+  - 6
+  - 7
+  - 8
+  - 17
+  - 49
+  - 3
+  list_5:
+  - 2
+  - 48
+  - 5
+  - 6
+  - 7
+  - 8
+  - 17
+  - 49
+  - 3
+  list_6:
+  - 2
+  - 26
+  - 5
+  - 6
+  - 7
+  - 8
+  - 17
+  - 49
+  list_7:
+  - 2
+  - 26
+  - 5
+  - 6
+  - 7
+  - 8
+  - 17
+  - 49
+  - 3
+  list_8:
+  - 2
+  - 5
+  - 7
+  - 8
+  - 17
+  - 49
+  list_9:
+  - 2
+  - 26
+  - 5
+  - 7
+  - 8
+  - 17
+  - 49
+rules:
+- company: ТОО "СМУ Аргон"
+  directors:
+  - 1
+  - 16
+  approvers: list_8
+  objects:
+  - Администрация
+- company: ТОО «Bestbuilding»
+  directors:
+  - 1
+  - 26
+  approvers: list_9
+  objects:
+  - Администрация
+- company: ТОО «BestLife Solutions»
+  directors:
+  - 1
+  - 29
+  approvers: list_1
+  objects:
+  - Администрация
+- company: ТОО «BestStroy»
+  directors:
+  - 1
+  - 30
+  approvers: list_1
+  objects:
+  - Администрация
+- company: ТОО «BuildingPlus»
+  directors:
+  - 1
+  - 31
+  approvers: list_1
+  objects:
+  - Администрация
+- company: ТОО «M2 Development»
+  directors:
+  - 1
+  - 10
+  approvers: list_1
+  objects:
+  - Администрация
+- company: ТОО «New Line Project»
+  directors:
+  - 1
+  - 44
+  approvers: list_1
+  objects:
+  - Администрация
+- company: ТОО «Алтын Шар West»
+  directors:
+  - 1
+  - 18
+  approvers: list_1
+  objects:
+  - Администрация
+- company: ТОО «Астана Механизация»
+  directors:
+  - 1
+  - 25
+  approvers: list_1
+  objects:
+  - Администрация
+- company: ТОО «Бағыстан»
+  directors:
+  - 1
+  - 28
+  approvers: list_1
+  objects:
+  - Администрация
+- company: ТОО «Аргон-Строй»
+  directors:
+  - 1
+  - 17
+  approvers: list_1
+  objects:
+  - Администрация
+- company: ТОО «Шар-Кұрылыс»
+  directors:
+  - 0
+  - 1
+  approvers: list_1
+  objects:
+  - Администрация
+- company: ТОО "Проект Максимум"
+  directors:
+  - 1
+  - 0
+  approvers: list_1
+  objects:
+  - Администрация
+- company: ТОО «Стройквартал»
+  directors:
+  - 1
+  - 37
+  approvers: list_1
+  objects:
+  - Администрация
+- company: ТОО "СМУ Аргон"
+  directors:
+  - 1
+  - 16
+  approvers: list_3
+  objects:
+  - ЖК "New Line"
+  - ЖК "New Line" 2
+  - ЖК "New Line" (2,4)
+  - ЖК "Багыстан-ФГЖС"
+  - ЖК "Багыстан-1"
+  - ЖК "Багыстан-3"
+  - ЖК "Багыстан-7"
+  - ЖК "Багыстан-8"
+  - ЖК "Багыстан-9"
+  - ЖК "Багыстан-10"
+  - ЖК "Багыстан-11"
+  - ЖК "Багыстан-12"
+  - ЖК "Багыстан-13"
+  - ЖК "Багыстан-14"
+  - ЖК "Багыстан-УС"
+  - ЖК "Grand Victoria 2"
+  - ЖК "Grand Victoria 3"
+  - ИЖС МКР Солнечный-2
+  - ННМЦ
+  - Школа (Нұра)
+  - Школа (Тельман)
+  - Школа (Уркер)
+  - Машины и Механизмы
+  - Г. Темиртау, пр. металлургов 5.2
+- company: ТОО «New Line Project»
+  directors:
+  - 1
+  - 44
+  approvers: list_3
+  objects:
+  - ЖК "New Line"
+  - ЖК "New Line" 2
+  - ЖК "New Line" (2,4)
+- company: ТОО «Бағыстан»
+  directors:
+  - 1
+  - 15
+  approvers: list_3
+  objects:
+  - ЖК "Багыстан-ФГЖС"
+  - ЖК "Багыстан-1"
+  - ЖК "Багыстан-3"
+  - ЖК "Багыстан-7"
+  - ЖК "Багыстан-11"
+  - ЖК "Багыстан-12"
+  - ЖК "Багыстан-13"
+  - ЖК "Багыстан-14"
+  - ЖК "Grand Victoria 2"
+  - ЖК "Grand Victoria 3"
+  - ЖК "New Line"
+  - ЖК "New Line" 2
+  - ЖК "New Line" (2,4)
+- company: ТОО «Проект Авангард»
+  directors:
+  - 1
+  - 34
+  approvers: list_3
+  objects:
+  - ЖК "Багыстан-12"
+  - ЖК "Багыстан-13"
+- company: ТОО «Интеграл Проект»
+  directors:
+  - 1
+  - 35
+  approvers: list_3
+  objects:
+  - ЖК "Багыстан-12"
+  - ЖК "Багыстан-13"
+- company: ТОО «EVOLVEKZ»
+  directors:
+  - 1
+  - 35
+  approvers: list_3
+  objects:
+  - ЖК "Багыстан-12"
+  - ЖК "Багыстан-13"
+- company: ТОО «СоюзСтройПроект»
+  directors:
+  - 1
+  - 47
+  approvers: list_3
+  objects:
+  - ЖК "Багыстан-12"
+  - ЖК "Багыстан-13"
+  - ЖК "Багыстан-14"
+- company: ТОО «Стройквартал»
+  directors:
+  - 1
+  - 37
+  approvers: list_3
+  objects:
+  - ЖК "Багыстан-12"
+  - ЖК "Багыстан-13"
+- company: ТОО "Проект Максимум"
+  directors:
+  - 0
+  - 0
+  approvers: list_3
+  objects:
+  - ЖК "Багыстан-12"
+  - ЖК "Багыстан-13"
+  - ЖК "Багыстан-14"
+- company: ТОО «BestLife Solutions»
+  directors:
+  - 1
+  - 29
+  approvers: list_3
+  objects:
+  - ЖК "Багыстан-12"
+  - ЖК "Багыстан-13"
+- company: ТОО «BuildingPlus»
+  directors:
+  - 1
+  - 31
+  approvers: list_3
+  objects:
+  - ЖК "Grand Victoria 2"
+- company: ТОО «BestStroy»
+  directors:
+  - 1
+  - 30
+  approvers: list_3
+  objects:
+  - ЖК "Grand Victoria 3"
+- company: ТОО «Алтын Шар West»
+  directors:
+  - 1
+  - 18
+  approvers: list_3
+  objects:
+  - ЖК "АлтынШар-1"
+  - ЖК "АлтынШар-2"
+- company: ТОО «Шар-Кұрылыс»
+  directors:
+  - 0
+  - 1
+  approvers: list_5
+  objects:
+  - ЖК "Багыстан-УС"
+  - ЖК "Багыстан-1"
+  - ЖК "Багыстан-3"
+  - ЖК "Багыстан-7"
+  - ЖК "Багыстан-8"
+  - ЖК "Багыстан-9"
+  - ЖК "Багыстан-10"
+  - ЖК "Багыстан-11"
+  - ЖК "Багыстан-12"
+  - ЖК "Багыстан-13"
+  - ЖК "Багыстан-14"
+  - ЖК "Grand Victoria 2"
+  - ЖК "Grand Victoria 3"
+  - ЖК "New Line"
+  - ЖК "New Line" 2
+  - ЖК "New Line" (2,4)
+  - ННМЦ
+  - ИЖС МКР Солнечный-2
+  - Офис отдела продаж (ГВ 1)
+  - Машины и Механизмы
+  - ЖК "АлтынШар-2"
+  - ЖК "АлтынШар-1"
+- company: ТОО «Аргон-Строй»
+  directors:
+  - 0
+  - 17
+  approvers: list_5
+  objects:
+  - ЖК "Багыстан-ФГЖС"
+  - ЖК "Багыстан-1"
+  - ЖК "Багыстан-3"
+  - ЖК "Багыстан-7"
+  - ЖК "Багыстан-11"
+  - ЖК "Багыстан-12"
+  - ЖК "Багыстан-13"
+  - Машины и Механизмы
+  - ЖК "АлтынШар-1"
+  - ЖК "АлтынШар-2"
+- company: ТОО "СМУ Аргон"
+  directors:
+  - 1
+  - 16
+  approvers: list_6
+  objects:
+  - ЖК "Grand Victoria 1"
+- company: ТОО «Bestbuilding»
+  directors:
+  - 1
+  - 26
+  approvers: list_6
+  objects:
+  - ЖК "Grand Victoria 1"
+- company: ТОО «Аргон-Строй»
+  directors:
+  - 1
+  - 17
+  approvers: list_7
+  objects:
+  - ЖК "Grand Victoria 1"
+company_fallbacks:
+- company: ТОО «Шар-Кұрылыс»
+  directors:
+  - 0
+  - 1
+  approvers: list_5
+- company: ТОО «Аргон-Строй»
+  directors:
+  - 1
+  - 17
+  approvers: list_5
+- company: ТОО «EVOLVEKZ»
+  directors:
+  - 0
+  - 19
+  approvers: list_2
+- company: ТОО "СМУ Аргон"
+  directors:
+  - 1
+  - 16
+  approvers: list_5
+expense_type_exclusions:
+  expense_types:
+  - коммерческие расходы
+  - зарплата
+  - налоги
+  remove_ids:
+  - 4
+  - 6
+
