@@ -2,6 +2,7 @@
 import asyncio
 import contextlib
 import logging
+import os
 
 from fastapi import FastAPI
 from fastapi import Response
@@ -13,7 +14,8 @@ from .logging_setup import setup_logging
 from .config import APP_DIR, Settings
 from .renderers.approvers import ApproverMatrix
 from .renderers.registry_outer import load_banks
-from .renderers.typst_renderer import typst_available
+from .renderers.typst_renderer import configure as configure_typst
+from .renderers.typst_renderer import typst_available, typst_binary
 from .opsrunner.registry import load_registry
 from .jobsqueue.service import JobQueue
 from .routers import files, jobs, ops, render, ui
@@ -42,8 +44,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.jobs = JobQueue(settings.db_path, lease_seconds=settings.lease_seconds,
                                   keep_days=settings.jobs_keep_days)
         task = asyncio.create_task(_sweep_loop(app))
-        if not typst_available():
-            log.warning("бинарь typst не найден — /render/typst будет отвечать 503")
+        configure_typst(settings.typst_bin)
+        binary = typst_binary()
+        if binary:
+            log.info("typst найден", extra={"data": {"path": binary}})
+        else:
+            log.warning("бинарь typst не найден — /render/typst будет отвечать 503; "
+                        "укажите GW_TYPST_BIN или добавьте каталог в PATH юнита",
+                        extra={"data": {"looked_for": settings.typst_bin,
+                                        "PATH": os.environ.get("PATH", "")}})
         log.info("gateway started")
         yield
         task.cancel()

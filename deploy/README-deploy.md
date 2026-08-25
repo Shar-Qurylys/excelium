@@ -35,8 +35,15 @@ sudo systemctl restart docv-gateway
 
 ## Что нужно для отдельных модулей
 
-- /render/typst — бинарь `typst` в PATH (https://typst.app, `cargo install typst-cli`
-  или готовый релиз). Без него endpoint отвечает 503.
+- /render/typst — бинарь `typst`. Под systemd PATH урезан
+  (/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin), поэтому
+  typst из `cargo install typst-cli` (он ложится в ~/.cargo/bin) в PATH не
+  виден, хотя `which typst` в консоли его находит. Любой из вариантов:
+  `sudo ln -sf /home/radmin/.cargo/bin/typst /usr/local/bin/typst` (симлинк
+  переживает обновления cargo, в отличие от копии), либо `GW_TYPST_BIN` с
+  абсолютным путём в .env, либо PATH в юните (там он уже прописан).
+  Найденный путь виден на «Обзоре» интерфейса; без бинаря endpoint
+  отвечает 503.
 - /ops xlsx_to_pdf — libreoffice (`apt install libreoffice-calc --no-install-recommends`).
 - /ops restart_unit — строка в sudoers (через `visudo`):
   `radmin ALL=(root) NOPASSWD: /usr/bin/systemctl restart docv-server.service`

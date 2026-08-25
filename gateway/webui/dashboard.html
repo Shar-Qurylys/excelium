@@ -4,14 +4,25 @@
 <h1>Обзор</h1>
 <div class="cards">
   <div class="stat"><div class="label">Typst</div>
-    <div class="value">{{ "есть" if typst else "нет" }}</div></div>
+    <div class="value">{{ "есть" if typst else "нет" }}</div>
+    <div class="muted mono" style="font-size:12px">{{ typst_path or "не найден в PATH" }}</div></div>
   <div class="stat"><div class="label">LibreOffice</div>
-    <div class="value">{{ "есть" if libreoffice else "нет" }}</div></div>
+    <div class="value">{{ "есть" if libreoffice else "нет" }}</div>
+    <div class="muted mono" style="font-size:12px">{{ libreoffice_path or "не найден в PATH" }}</div></div>
   <div class="stat"><div class="label">Файлов в хранилище</div>
     <div class="value">{{ files_count }} <span class="muted" style="font-size:14px">({{ files_mb }} МБ)</span></div></div>
   <div class="stat"><div class="label">Задания: в очереди / выданы / готово</div>
     <div class="value">{{ jobs.get('pending', 0) }} / {{ jobs.get('leased', 0) }} / {{ jobs.get('acked', 0) }}</div></div>
 </div>
+{% if not typst or not libreoffice %}
+<div class="card">
+  <h2 style="margin-top:0">PATH процесса</h2>
+  <p class="muted">Программа ищется в этом PATH и в типичных каталогах
+    (~/.cargo/bin, /usr/local/bin, /usr/bin, /opt/typst, /snap/bin).
+    Если бинарь лежит в другом месте, укажите его в GW_TYPST_BIN.</p>
+  <pre class="out">{{ path_env }}</pre>
+</div>
+{% endif %}
 <div class="card">
   <h2 style="margin-top:0">Последние события (audit)</h2>
   {% if events %}

@@ -6,6 +6,7 @@ After = network.target
 User=radmin
 Group=www-data
 WorkingDirectory=/home/radmin/Documents/docv-gateway
+Environment="PATH=/home/radmin/Documents/docv-gateway/venv/bin:/home/radmin/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 EnvironmentFile=/home/radmin/Documents/docv-gateway/.env
 ExecStart=/home/radmin/Documents/docv-gateway/venv/bin/uvicorn gateway.main:app --host 192.168.30.19 --port 25353 --workers 2
 Restart=on-failure

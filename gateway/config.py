@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # Адрес, по которому Doc-V скачивает файлы (не берём из Host-заголовка)
     base_url: str = "http://192.168.30.19:25353"
 
+    # Внешние программы. Пусто/"typst" — искать в PATH и типичных
+    # каталогах; можно указать абсолютный путь.
+    typst_bin: str = "typst"
+
     # Хранилище
     var_dir: Path = APP_DIR / "var"
     file_ttl_hours: int = 72

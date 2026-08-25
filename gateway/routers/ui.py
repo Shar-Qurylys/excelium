@@ -7,6 +7,7 @@ Server-rendered Jinja2 без внешних ресурсов. Вход — ад
 """
 import json
 import logging
+import os
 import shutil
 from datetime import date
 
@@ -21,7 +22,8 @@ from ..opsrunner.runner import OpsValidationError, run_operation
 from ..renderers.registry_inner import render_inner
 from ..renderers.registry_outer import render_outer
 from ..renderers.registry_priority import render_priority
-from ..renderers.typst_renderer import TypstError, render_typst, typst_available
+from ..renderers.typst_renderer import (TypstError, render_typst, typst_available,
+                                        typst_binary)
 from ..security import ADMIN_COOKIE, _match
 from .render import TYPST_DIR, _deliver, _sorted
 
@@ -95,8 +97,10 @@ def dashboard(request: Request):
             events.append({"ts": e.get("ts", ""), "message": e.get("message", ""),
                            "details": json.dumps(details, ensure_ascii=False)})
     return _page(request, "dashboard.html", "dash",
-                 typst=typst_available(),
+                 typst=typst_available(), typst_path=typst_binary(),
                  libreoffice=shutil.which("libreoffice") is not None,
+                 libreoffice_path=shutil.which("libreoffice"),
+                 path_env=os.environ.get("PATH", ""),
                  files_count=len(files),
                  files_mb=round(sum(f["size"] for f in files) / 1024 / 1024, 1),
                  jobs=state.jobs.stats(), events=events)
