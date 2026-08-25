@@ -7,3 +7,5 @@ openpyxl==3.1.5
 PyYAML==6.0.3
 qrcode[pil]==8.2
 transliterate==1.10.2
+Jinja2==3.1.6
+python-multipart==0.0.32

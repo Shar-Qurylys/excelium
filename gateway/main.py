@@ -4,6 +4,7 @@ import contextlib
 import logging
 
 from fastapi import FastAPI
+from fastapi import Response
 from fastapi.responses import JSONResponse
 
 from .filestore.store import FileStore
@@ -15,7 +16,7 @@ from .renderers.registry_outer import load_banks
 from .renderers.typst_renderer import typst_available
 from .opsrunner.registry import load_registry
 from .jobsqueue.service import JobQueue
-from .routers import files, jobs, ops, render
+from .routers import files, jobs, ops, render, ui
 from .security import SecurityMiddleware
 
 log = logging.getLogger(__name__)
@@ -55,10 +56,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(render.router)
     app.include_router(ops.router)
     app.include_router(jobs.router)
+    app.include_router(ui.router)
 
     @app.get("/health")
     def health():
         return {"status": "ok"}
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon():
+        return Response(status_code=204)
 
     @app.exception_handler(Exception)
     async def unhandled(request, exc):

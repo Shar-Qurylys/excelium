@@ -61,6 +61,30 @@ class FileStore:
     def download_url(self, token: str) -> str:
         return f"{self.settings.base_url}/files/{token}"
 
+    def list_files(self) -> list[dict]:
+        with connect(self.settings.db_path) as conn:
+            rows = conn.execute(
+                "SELECT token, orig_name, suffix, created_at FROM files"
+                " ORDER BY created_at DESC").fetchall()
+        out = []
+        for row in rows:
+            path = self.files_dir / f"{row['token']}{row['suffix']}"
+            out.append({"token": row["token"], "orig_name": row["orig_name"],
+                        "suffix": row["suffix"], "created_at": row["created_at"],
+                        "size": path.stat().st_size if path.is_file() else 0})
+        return out
+
+    def delete(self, token: str) -> bool:
+        if not TOKEN_RE.fullmatch(token):
+            return False
+        with connect(self.settings.db_path) as conn:
+            row = conn.execute("SELECT suffix FROM files WHERE token = ?", (token,)).fetchone()
+            if row is None:
+                return False
+            conn.execute("DELETE FROM files WHERE token = ?", (token,))
+        (self.files_dir / f"{token}{row['suffix']}").unlink(missing_ok=True)
+        return True
+
     def sweep(self) -> int:
         """Удаляет файлы старше TTL и осиротевшие файлы без записи."""
         cutoff = (

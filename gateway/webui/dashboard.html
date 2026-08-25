@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Обзор — Doc-V Gateway{% endblock %}
+{% block content %}
+<h1>Обзор</h1>
+<div class="cards">
+  <div class="stat"><div class="label">Typst</div>
+    <div class="value">{{ "есть" if typst else "нет" }}</div></div>
+  <div class="stat"><div class="label">LibreOffice</div>
+    <div class="value">{{ "есть" if libreoffice else "нет" }}</div></div>
+  <div class="stat"><div class="label">Файлов в хранилище</div>
+    <div class="value">{{ files_count }} <span class="muted" style="font-size:14px">({{ files_mb }} МБ)</span></div></div>
+  <div class="stat"><div class="label">Задания: в очереди / выданы / готово</div>
+    <div class="value">{{ jobs.get('pending', 0) }} / {{ jobs.get('leased', 0) }} / {{ jobs.get('acked', 0) }}</div></div>
+</div>
+<div class="card">
+  <h2 style="margin-top:0">Последние события (audit)</h2>
+  {% if events %}
+  <table>
+    <tr><th>Время</th><th>Событие</th><th>Детали</th></tr>
+    {% for e in events %}
+    <tr>
+      <td class="mono muted">{{ e.ts }}</td>
+      <td>{{ e.message }}</td>
+      <td class="mono">{{ e.details }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">Событий пока нет.</p>{% endif %}
+</div>
+{% endblock %}

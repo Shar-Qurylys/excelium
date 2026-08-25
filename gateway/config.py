@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     allowlist: list[str] = ["192.168.30.29", "127.0.0.1", "::1"]
     token_docv: str = ""
     token_ops: str = ""
+    token_admin: str = ""  # вход в веб-интерфейс /ui
     producer_tokens: dict[str, str] = {}
 
     # Адрес, по которому Doc-V скачивает файлы (не берём из Host-заголовка)
