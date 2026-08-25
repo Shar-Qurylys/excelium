@@ -1,0 +1,54 @@
+# Реестр операций шлюза — замена платного действия «Запуск».
+#
+# Каждая операция — фиксированный argv-шаблон. Shell не используется
+# никогда; значения параметров валидируются regex-ом и попадают в
+# команду только отдельным аргументом. Файловые параметры принимают
+# токен из /files и копируются во временную папку под человеческим
+# именем; файлы, попавшие под collect, возвращаются ссылками в ответе.
+#
+# Встроенные плейсхолдеры: {workdir} — временная папка запуска,
+# {app_dir} — корень сервиса, {python} — python из venv сервиса.
+#
+# Добавление операции = одна запись здесь + перезапуск юнита.
+# Кривой конфиг валит старт сервиса — ошибку видно сразу.
+
+operations:
+
+  xlsx_to_pdf:
+    description: Конвертация xlsx из хранилища в PDF (печать/рассылка реестров)
+    argv: ["/usr/bin/libreoffice", "--headless", "--convert-to", "pdf",
+           "--outdir", "{workdir}", "{file}"]
+    params:
+      file: {type: file}
+    collect: "*.pdf"
+    timeout_sec: 120
+
+  zip_bundle:
+    description: Упаковка нескольких файлов из хранилища в один архив
+    argv: ["{python}", "{app_dir}/scripts/zip_bundle.py", "{files...}"]
+    params:
+      files: {type: file_list, max_items: 50}
+    collect: "*.zip"
+    timeout_sec: 60
+
+  qr_link:
+    description: PNG с QR-кодом ссылки на документ Doc-V (для печатных форм)
+    argv: ["{python}", "{app_dir}/scripts/qr_link.py", "{url}"]
+    params:
+      url: {pattern: "^https?://192\\.168\\.30\\.29(:\\d+)?/[A-Za-z0-9/_?=&.#%-]*$"}
+    collect: "*.png"
+    timeout_sec: 15
+
+  translit:
+    description: Транслитерация кириллицы в латиницу (ФИО для банковских документов)
+    argv: ["{python}", "{app_dir}/scripts/translit.py", "{text}"]
+    params:
+      text: {pattern: "^[-\\w\\s.,«»'\"]{1,200}$"}
+    timeout_sec: 10
+
+  restart_unit:
+    description: Перезапуск разрешённого systemd-юнита (нужна строка в sudoers)
+    argv: ["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "restart", "{unit}"]
+    params:
+      unit: {pattern: "^(docv-gateway|nginx)\\.service$"}
+    timeout_sec: 30

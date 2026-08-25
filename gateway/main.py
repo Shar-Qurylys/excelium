@@ -13,7 +13,8 @@ from .config import APP_DIR, Settings
 from .renderers.approvers import ApproverMatrix
 from .renderers.registry_outer import load_banks
 from .renderers.typst_renderer import typst_available
-from .routers import files, render
+from .opsrunner.registry import load_registry
+from .routers import files, ops, render
 from .security import SecurityMiddleware
 
 log = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.template_inner = APP_DIR / "templates" / "excel" / "template.xlsx"
         app.state.template_outer = APP_DIR / "templates" / "excel" / "template_outer.xlsx"
         app.state.template_priority = APP_DIR / "templates" / "excel" / "template_priority_registry.xlsx"
+        app.state.ops = load_registry(APP_DIR / "ops.yaml")
         task = asyncio.create_task(_sweep_loop(app))
         if not typst_available():
             log.warning("бинарь typst не найден — /render/typst будет отвечать 503")
@@ -48,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(SecurityMiddleware, settings=settings)
     app.include_router(files.router)
     app.include_router(render.router)
+    app.include_router(ops.router)
 
     @app.get("/health")
     def health():
