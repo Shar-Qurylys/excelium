@@ -14,7 +14,8 @@ from .renderers.approvers import ApproverMatrix
 from .renderers.registry_outer import load_banks
 from .renderers.typst_renderer import typst_available
 from .opsrunner.registry import load_registry
-from .routers import files, ops, render
+from .jobsqueue.service import JobQueue
+from .routers import files, jobs, ops, render
 from .security import SecurityMiddleware
 
 log = logging.getLogger(__name__)
@@ -37,6 +38,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.template_outer = APP_DIR / "templates" / "excel" / "template_outer.xlsx"
         app.state.template_priority = APP_DIR / "templates" / "excel" / "template_priority_registry.xlsx"
         app.state.ops = load_registry(APP_DIR / "ops.yaml")
+        app.state.jobs = JobQueue(settings.db_path, lease_seconds=settings.lease_seconds,
+                                  keep_days=settings.jobs_keep_days)
         task = asyncio.create_task(_sweep_loop(app))
         if not typst_available():
             log.warning("бинарь typst не найден — /render/typst будет отвечать 503")
@@ -51,6 +54,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(files.router)
     app.include_router(render.router)
     app.include_router(ops.router)
+    app.include_router(jobs.router)
 
     @app.get("/health")
     def health():
@@ -69,6 +73,7 @@ async def _sweep_loop(app: FastAPI) -> None:
         await asyncio.sleep(SWEEP_INTERVAL_SEC)
         try:
             await asyncio.to_thread(app.state.filestore.sweep)
+            await asyncio.to_thread(app.state.jobs.sweep)
         except Exception:
             log.exception("sweep failed")
 
