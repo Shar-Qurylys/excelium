@@ -12,6 +12,7 @@ from .logging_setup import setup_logging
 from .config import APP_DIR, Settings
 from .renderers.approvers import ApproverMatrix
 from .renderers.registry_outer import load_banks
+from .renderers.typst_renderer import typst_available
 from .routers import files, render
 from .security import SecurityMiddleware
 
@@ -35,6 +36,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.template_outer = APP_DIR / "templates" / "excel" / "template_outer.xlsx"
         app.state.template_priority = APP_DIR / "templates" / "excel" / "template_priority_registry.xlsx"
         task = asyncio.create_task(_sweep_loop(app))
+        if not typst_available():
+            log.warning("бинарь typst не найден — /render/typst будет отвечать 503")
         log.info("gateway started")
         yield
         task.cancel()

@@ -8,12 +8,17 @@ import logging
 import re
 from datetime import date
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from ..config import APP_DIR
 from ..renderers.registry_inner import render_inner
 from ..renderers.registry_outer import render_outer
 from ..renderers.registry_priority import render_priority
+from ..renderers.typst_renderer import TypstError, render_typst, typst_available
+
+TYPST_DIR = APP_DIR / "templates" / "typst"
+TEMPLATE_NAME_RE = re.compile(r"^[a-z0-9_-]{1,64}$")
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -68,3 +73,20 @@ def registry_priority(payload: RegistryPayload, request: Request):
     workbook = render_priority(entries, request.app.state.template_priority)
     name = f"reestr_prioritetov_{_sanitize(_regnum(entries))}_ot_{date.today()}.xlsx"
     return _deliver(request, workbook, name)
+
+
+@router.post("/render/typst/{name}")
+def render_typst_endpoint(name: str, request: Request, data: dict = Body(...)):
+    if not TEMPLATE_NAME_RE.fullmatch(name):
+        raise HTTPException(status_code=404)
+    template = TYPST_DIR / f"{name}.typ"
+    if not template.is_file():
+        raise HTTPException(status_code=404, detail="нет такого шаблона")
+    if not typst_available():
+        raise HTTPException(status_code=503, detail="typst не установлен на сервере")
+    try:
+        pdf = render_typst(template, data)
+    except TypstError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    token = request.app.state.filestore.save_bytes(pdf, ".pdf", f"{name}_{date.today()}.pdf")
+    return {"download_url": request.app.state.filestore.download_url(token)}
