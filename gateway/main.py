@@ -1,0 +1,62 @@
+"""Doc-V Gateway: FastAPI-приложение."""
+import asyncio
+import contextlib
+import logging
+
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+
+from .config import Settings
+from .filestore.store import FileStore
+from .jobsqueue.db import init_db
+from .logging_setup import setup_logging
+from .routers import files
+from .security import SecurityMiddleware
+
+log = logging.getLogger(__name__)
+
+SWEEP_INTERVAL_SEC = 15 * 60
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or Settings()
+    setup_logging(settings.var_dir)
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app: FastAPI):
+        init_db(settings.db_path)
+        app.state.settings = settings
+        app.state.filestore = FileStore(settings)
+        task = asyncio.create_task(_sweep_loop(app))
+        log.info("gateway started")
+        yield
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    app = FastAPI(title="Doc-V Gateway", lifespan=lifespan)
+    app.add_middleware(SecurityMiddleware, settings=settings)
+    app.include_router(files.router)
+
+    @app.get("/health")
+    def health():
+        return {"status": "ok"}
+
+    @app.exception_handler(Exception)
+    async def unhandled(request, exc):
+        log.exception("unhandled error at %s", request.url.path)
+        return JSONResponse({"error": "internal", "detail": str(exc)}, status_code=500)
+
+    return app
+
+
+async def _sweep_loop(app: FastAPI) -> None:
+    while True:
+        await asyncio.sleep(SWEEP_INTERVAL_SEC)
+        try:
+            await asyncio.to_thread(app.state.filestore.sweep)
+        except Exception:
+            log.exception("sweep failed")
+
+
+app = create_app()

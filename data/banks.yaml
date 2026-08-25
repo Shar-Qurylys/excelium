@@ -1,0 +1,19 @@
+# БИК -> название банка для внешнего реестра (бывший словарь в
+# models/outer_registry.py). «?» в исходнике значило «название не
+# заполнено» — при выводе такой банк подписывается самим БИКом.
+KCJBKZKX: Банк Центр Кредит
+KSNVKZKA: Банк Фридом Финанс Казахстан
+'046577743': '?'
+KKMFKZ2A: '?'
+KPSTKZKA: АО "Казпочта"
+KZIBKZKA: ДБ "КЗИ Банк"
+KINCKZKA: Bank RBK
+SABRKZKA: '?'
+IRTYKZKA: ForteBank
+'044525142': '?'
+'044525700': '?'
+CASPKZKA: Kaspi Bank
+HSBKKZKX: Народный сберегательный банк Казахстана
+TSESKZKA: First Heartland Jusan Bank
+EURIKZKA: Евразийский Банк
+NBRKKZKX: '?'

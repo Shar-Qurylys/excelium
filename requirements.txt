@@ -1,0 +1,9 @@
+# Runtime (CPython 3.11+)
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic==2.13.4
+pydantic-settings==2.15.0
+openpyxl==3.1.5
+PyYAML==6.0.3
+qrcode[pil]==8.2
+transliterate==1.10.2

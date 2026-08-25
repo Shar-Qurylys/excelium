@@ -1,9 +1,8 @@
-__pycache__
-models/__pycache__
-routes/__pycache__
-tests/__pycache__
-utils/__pycache__
-utils/firmen_und_objekte.py
+__pycache__/
+*.pyc
 .DS_Store
-excel_templates
+.venv/
+venv/
+.env
+var/
 saves/
