@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Операции — Doc-V Gateway{% endblock %}
+{% block content %}
+<h1>Операции</h1>
+<p class="muted">Реестр — в ops.yaml; добавление операции = запись там и
+перезапуск юнита. Файловые параметры берут файлы со страницы «Файлы».</p>
+{% for name, op in ops.items() %}
+<div class="card">
+  <h2 style="margin-top:0">{{ name }}</h2>
+  <p class="muted">{{ op.description or "Без описания" }} · таймаут {{ op.timeout_sec }} с</p>
+  <form method="post" action="/ui/ops/{{ name }}">
+    {% for pname, p in op.params.items() %}
+      {% if p.type == 'str' %}
+        <label>{{ pname }} <span class="hint">{{ p.pattern.pattern }}</span></label>
+        <input type="text" name="{{ pname }}">
+      {% elif p.type == 'file' %}
+        <label>{{ pname }} <span class="hint">файл из хранилища</span></label>
+        <select name="{{ pname }}">
+          <option value="">—</option>
+          {% for f in files %}<option value="{{ f.token }}">{{ f.orig_name }}</option>{% endfor %}
+        </select>
+      {% else %}
+        <label>{{ pname }} <span class="hint">файлы из хранилища, до {{ p.max_items }} (Cmd/Ctrl-клик)</span></label>
+        <select name="{{ pname }}" multiple size="4">
+          {% for f in files %}<option value="{{ f.token }}">{{ f.orig_name }}</option>{% endfor %}
+        </select>
+      {% endif %}
+    {% endfor %}
+    <button>Запустить</button>
+  </form>
+  {% if result and result.op == name %}
+    <h2>Результат
+      <span class="badge {{ 'ok' if result.ok else 'fail' }}">
+        {{ 'ok' if result.ok else 'ошибка' }}</span>
+      <span class="muted" style="font-weight:400">exit {{ result.exit_code }},
+        {{ result.duration_ms }} мс</span></h2>
+    {% if result.files %}
+      <p>{% for f in result.files %}
+        <a class="btn" style="margin-right:8px" href="{{ f.download_url }}">{{ f.name }}</a>
+      {% endfor %}</p>
+    {% endif %}
+    {% if result.stdout %}<pre class="out">{{ result.stdout }}</pre>{% endif %}
+    {% if result.stderr %}<pre class="out">{{ result.stderr }}</pre>{% endif %}
+    {% if result.error %}<pre class="out">{{ result.error }}</pre>{% endif %}
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

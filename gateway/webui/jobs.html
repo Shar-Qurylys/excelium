@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Задания — Doc-V Gateway{% endblock %}
+{% block content %}
+<h1>Очередь заданий</h1>
+<div class="card">
+  <form method="get" action="/ui/jobs">
+    <label>Статус
+      <select name="status" onchange="this.form.submit()">
+        <option value="">все</option>
+        {% for s in ('pending', 'leased', 'acked') %}
+        <option value="{{ s }}" {{ 'selected' if s == status_filter else '' }}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </form>
+  {% if rows %}
+  <table>
+    <tr><th>ID</th><th>Продюсер</th><th>Тип</th><th>Статус</th><th>Попыток</th>
+        <th>Создано</th><th>Аренда до</th><th>Подтверждено</th><th></th></tr>
+    {% for j in rows %}
+    <tr>
+      <td class="mono">{{ j.id }}</td>
+      <td>{{ j.producer }}</td>
+      <td>{{ j.type }}</td>
+      <td><span class="badge {{ j.status }}">{{ j.status }}</span></td>
+      <td>{{ j.attempts }}</td>
+      <td class="mono muted">{{ j.created_at }}</td>
+      <td class="mono muted">{{ j.leased_until or "" }}</td>
+      <td class="mono muted">{{ j.acked_at or "" }}</td>
+      <td>{% if j.status != 'acked' %}
+        <form class="inline" method="post" action="/ui/jobs/ack/{{ j.id }}">
+          <button class="small">подтвердить</button></form>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">Заданий нет.</p>{% endif %}
+</div>
+<div class="card">
+  <h2 style="margin-top:0">Тестовое задание</h2>
+  <p class="muted">Кладёт задание в очередь от имени продюсера «ui» — точка
+    «Опрос» в Doc-V заберёт его при следующем срабатывании.</p>
+  <form method="post" action="/ui/jobs/new">
+    <label>Тип задания</label>
+    <input type="text" name="type" value="тест">
+    <label>Payload (JSON)</label>
+    <textarea name="payload" rows="4">{"пример": true}</textarea>
+    <button>Поставить в очередь</button>
+  </form>
+</div>
+{% endblock %}

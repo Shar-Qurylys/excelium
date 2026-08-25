@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Файлы — Doc-V Gateway{% endblock %}
+{% block content %}
+<h1>Хранилище файлов</h1>
+<div class="card">
+  <form method="post" action="/ui/files/upload" enctype="multipart/form-data">
+    <label>Загрузить файл <span class="hint">— получит токен, годится параметром
+      для операций; истечёт через {{ ttl_hours }} ч.</span></label>
+    <input type="file" name="upload">
+    <button>Загрузить</button>
+  </form>
+</div>
+<div class="card">
+  {% if rows %}
+  <table>
+    <tr><th>Имя</th><th>Токен</th><th>Размер</th><th>Создан</th><th></th></tr>
+    {% for f in rows %}
+    <tr>
+      <td><a href="/files/{{ f.token }}">{{ f.orig_name }}</a></td>
+      <td class="mono muted">{{ f.token }}</td>
+      <td>{{ "%.1f"|format(f.size / 1024) }} КБ</td>
+      <td class="mono muted">{{ f.created_at }}</td>
+      <td><form class="inline" method="post" action="/ui/files/delete/{{ f.token }}">
+        <button class="small danger">удалить</button></form></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">Хранилище пусто.</p>{% endif %}
+</div>
+{% endblock %}

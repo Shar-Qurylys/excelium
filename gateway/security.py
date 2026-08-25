@@ -1,22 +1,30 @@
-"""Middleware безопасности: IP-allowlist -> bearer-токен по скоупу -> rate limit.
+"""Middleware безопасности: IP-allowlist -> авторизация -> rate limit.
 
-Провал любой проверки — единообразный 403 (429 для rate limit); причина
-пишется только в audit-лог. Rate limit — fixed window на процесс: клиент
-один (сервер Doc-V), точность между воркерами не требуется.
+API-пути закрыты bearer-токенами по скоупам; веб-интерфейс /ui — cookie
+с админ-токеном (ставится формой входа). Провал любой проверки — 403
+(429 для rate limit); причина пишется только в audit-лог. Rate limit —
+fixed window на процесс: клиентов единицы, точность между воркерами
+не требуется.
+
+Allowlist принимает и адреса, и подсети: ["192.168.30.29",
+"192.168.30.0/24", "127.0.0.1", "::1"].
 """
+import ipaddress
 import secrets
 import threading
 import time
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
 
 from .config import Settings
 from .logging_setup import audit_log
 
 _FORBIDDEN = JSONResponse({"error": "forbidden"}, status_code=403)
 _RATE_LIMITED = JSONResponse({"error": "rate_limited"}, status_code=429)
+
+ADMIN_COOKIE = "gw_admin"
 
 
 class _Window:
@@ -43,6 +51,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.settings = settings
         self.window = _Window()
+        self.networks = _parse_allowlist(settings.allowlist)
 
     async def dispatch(self, request: Request, call_next):
         s = self.settings
@@ -50,31 +59,37 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         method = request.method
 
-        if ip not in s.allowlist:
+        if not _ip_allowed(ip, self.networks):
             audit_log("deny_ip", ip=ip, path=path)
             return _FORBIDDEN
 
         # Пути только с IP-проверкой: health и выдача файлов (токен файла — сам секрет)
-        exempt = (method == "GET" and (path == "/health" or path.startswith("/files/")))
+        exempt = (method == "GET" and (path == "/health" or path == "/favicon.ico"
+                                       or path.startswith("/files/")))
 
         if not exempt:
-            supplied = ""
-            auth = request.headers.get("authorization", "")
-            if auth.startswith("Bearer "):
-                supplied = auth[len("Bearer "):].strip()
-
-            if path.startswith("/ops/"):
-                ok = _match(supplied, s.token_ops)
-            elif path == "/jobs" and method == "POST":
-                producer = _match_producer(supplied, s.producer_tokens)
-                ok = producer is not None
-                request.state.producer = producer
+            if path == "/ui" or path.startswith("/ui/"):
+                verdict = self._check_ui(request, path)
+                if verdict is not None:
+                    return verdict
             else:
-                # /render/*, /jobs/pending, /jobs/ack и всё прочее — токен Doc-V
-                ok = _match(supplied, s.token_docv)
-            if not ok:
-                audit_log("deny_token", ip=ip, path=path)
-                return _FORBIDDEN
+                supplied = ""
+                auth = request.headers.get("authorization", "")
+                if auth.startswith("Bearer "):
+                    supplied = auth[len("Bearer "):].strip()
+
+                if path.startswith("/ops/") or path == "/ops":
+                    ok = _match(supplied, s.token_ops)
+                elif path == "/jobs" and method == "POST":
+                    producer = _match_producer(supplied, s.producer_tokens)
+                    ok = producer is not None
+                    request.state.producer = producer
+                else:
+                    # /render/*, /jobs/pending, /jobs/ack и всё прочее — токен Doc-V
+                    ok = _match(supplied, s.token_docv)
+                if not ok:
+                    audit_log("deny_token", ip=ip, path=path)
+                    return _FORBIDDEN
 
         limit = s.ops_rate_limit_per_min if path.startswith("/ops/") else s.rate_limit_per_min
         bucket = "ops" if path.startswith("/ops/") else "default"
@@ -84,9 +99,48 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
         return await call_next(request)
 
+    def _check_ui(self, request: Request, path: str):
+        """None — пропустить; иначе готовый ответ."""
+        if path == "/ui/login":
+            return None
+        cookie = request.cookies.get(ADMIN_COOKIE, "")
+        if _match(cookie, self.settings.token_admin):
+            return None
+        audit_log("deny_ui", ip=request.client.host if request.client else "", path=path)
+        if request.method == "GET":
+            return RedirectResponse("/ui/login", status_code=302)
+        return _FORBIDDEN
+
+
+def _parse_allowlist(entries: list[str]):
+    """-> (множество сырых имён вроде "testclient", список сетей)."""
+    names, networks = set(), []
+    for entry in entries:
+        entry = entry.strip()
+        if not entry:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            names.add(entry)  # не-адрес (клиент тестов)
+    return names, networks
+
+
+def _ip_allowed(ip: str, allowed) -> bool:
+    names, networks = allowed
+    if ip in names:
+        return True
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in networks)
+
 
 def _match(supplied: str, expected: str) -> bool:
-    return bool(expected) and secrets.compare_digest(supplied, expected)
+    # compare_digest не принимает не-ASCII строки — сравниваем байты
+    return bool(expected) and secrets.compare_digest(
+        supplied.encode("utf-8"), expected.encode("utf-8"))
 
 
 def _match_producer(supplied: str, producers: dict[str, str]) -> str | None:

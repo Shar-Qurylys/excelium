@@ -11,6 +11,7 @@ from gateway.main import create_app  # noqa: E402
 
 TOKEN_DOCV = "test-docv-token"
 TOKEN_OPS = "test-ops-token"
+TOKEN_ADMIN = "test-admin-token"
 PRODUCER_TOKENS = {"onec": "test-producer-token"}
 
 
@@ -20,6 +21,7 @@ def settings(tmp_path):
         allowlist=["testclient", "127.0.0.1"],
         token_docv=TOKEN_DOCV,
         token_ops=TOKEN_OPS,
+        token_admin=TOKEN_ADMIN,
         producer_tokens=PRODUCER_TOKENS,
         base_url="http://testserver",
         var_dir=tmp_path / "var",

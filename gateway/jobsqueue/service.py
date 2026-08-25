@@ -95,6 +95,24 @@ class JobQueue:
                     acked.append(job_id)
         return {"acked": acked, "already_acked": already, "unknown": unknown}
 
+    def list_jobs(self, *, status: str | None = None, limit: int = 200) -> list[dict]:
+        query = ("SELECT id, consumer, producer, type, status, attempts,"
+                 " leased_until, created_at, acked_at FROM jobs")
+        args: list = []
+        if status:
+            query += " WHERE status = ?"
+            args.append(status)
+        query += " ORDER BY id DESC LIMIT ?"
+        args.append(limit)
+        with connect(self.db_path) as conn:
+            return [dict(r) for r in conn.execute(query, args).fetchall()]
+
+    def stats(self) -> dict[str, int]:
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT status, COUNT(*) AS n FROM jobs GROUP BY status").fetchall()
+        return {r["status"]: r["n"] for r in rows}
+
     def sweep(self) -> int:
         cutoff = _iso(_now() - timedelta(days=self.keep_days))
         with connect(self.db_path) as conn:
