@@ -24,6 +24,27 @@ CREATE TABLE IF NOT EXISTS files (
   suffix TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS typst_templates (
+  name TEXT PRIMARY KEY,
+  source TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS typst_template_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  source TEXT NOT NULL,
+  saved_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_typst_history ON typst_template_history(name, id);
+CREATE TABLE IF NOT EXISTS typst_assets (
+  name TEXT PRIMARY KEY,
+  data BLOB NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS heartbeat (
+  kind TEXT PRIMARY KEY,
+  seen_at TEXT NOT NULL
+);
 """
 
 

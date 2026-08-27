@@ -47,12 +47,20 @@ def render_priority(entries: list[dict], template_path):
         total_row = START_ROW + len(group)
         sheet[f"D{total_row}"] = "ВСЕГО"
         sheet[f"E{total_row}"] = total
-        sheet[f"B{total_row + 2}"] = "Начальник ПТО"
-        sheet[f"D{total_row + 2}"] = "___________________   Королькова Е. В."
-        sheet[f"B{total_row + 4}"] = "Исполнительный директор"
-        sheet[f"D{total_row + 4}"] = "___________________   Сергачев П.А."
-        for ref in (f"D{total_row}", f"E{total_row}", f"B{total_row + 2}",
-                    f"D{total_row + 2}", f"B{total_row + 4}", f"D{total_row + 4}"):
+        styled = [f"D{total_row}", f"E{total_row}"]
+
+        # Подписи: из payload Doc-V ("signers".coordinators), иначе прежние
+        signers = entries[0].get("signers") if entries else None
+        coordinators = (signers or {}).get("coordinators") or [
+            {"position": "Начальник ПТО", "fio": "Королькова Е. В."},
+            {"position": "Исполнительный директор", "fio": "Сергачев П.А."},
+        ]
+        for i, person in enumerate(coordinators):
+            row = total_row + 2 + i * 2
+            sheet[f"B{row}"] = str(person.get("position") or "")
+            sheet[f"D{row}"] = f"___________________   {person.get('fio') or ''}"
+            styled += [f"B{row}", f"D{row}"]
+        for ref in styled:
             sheet[ref].font = font
 
     workbook.remove(template_sheet)

@@ -66,7 +66,13 @@ def _executable(path: str) -> bool:
     return os.path.isfile(path) and os.access(path, os.X_OK)
 
 
-def render_typst(template_path: Path, data: dict) -> bytes:
+def render_typst(name: str, source: str, data: dict,
+                 assets: dict[str, bytes] | None = None) -> bytes:
+    """Компилирует шаблон source (имя нужно для сообщений об ошибках).
+
+    Картинки assets кладутся в подпапку assets/ рабочей директории —
+    шаблон подключает их как #image("assets/имя.png").
+    """
     binary = typst_binary()
     if binary is None:
         raise TypstError(f"typst не найден (искали {_binary_setting!r}); "
@@ -75,12 +81,16 @@ def render_typst(template_path: Path, data: dict) -> bytes:
         work = Path(workdir)
         (work / "data.json").write_text(json.dumps(data, ensure_ascii=False),
                                         encoding="utf-8")
-        shutil.copy(template_path, work / template_path.name)
+        (work / f"{name}.typ").write_text(source, encoding="utf-8")
+        if assets:
+            (work / "assets").mkdir()
+            for asset_name, blob in assets.items():
+                (work / "assets" / asset_name).write_bytes(blob)
         out = work / "out.pdf"
         try:
             proc = subprocess.run(
                 [binary, "compile", "--root", str(work),
-                 "--input", "data=data.json", template_path.name, out.name],
+                 "--input", "data=data.json", f"{name}.typ", out.name],
                 cwd=work, capture_output=True, text=True, timeout=TIMEOUT_SEC,
             )
         except subprocess.TimeoutExpired:

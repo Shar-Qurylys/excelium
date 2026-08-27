@@ -13,7 +13,9 @@ from .jobsqueue.db import init_db
 from .logging_setup import setup_logging
 from .config import APP_DIR, Settings
 from .renderers.approvers import ApproverMatrix
+from .heartbeat import Heartbeat
 from .renderers.registry_outer import load_banks
+from .renderers.typst_store import TypstStore
 from .renderers.typst_renderer import configure as configure_typst
 from .renderers.typst_renderer import typst_available, typst_binary
 from .opsrunner.registry import load_registry
@@ -43,6 +45,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.ops = load_registry(APP_DIR / "ops.yaml")
         app.state.jobs = JobQueue(settings.db_path, lease_seconds=settings.lease_seconds,
                                   keep_days=settings.jobs_keep_days)
+        app.state.heartbeat = Heartbeat(settings.db_path)
+        app.state.typst_store = TypstStore(settings.db_path)
+        seeded = app.state.typst_store.seed_from_dir(APP_DIR / "templates" / "typst")
+        if seeded:
+            log.info("typst-шаблоны импортированы из файлов",
+                     extra={"data": {"count": seeded}})
         task = asyncio.create_task(_sweep_loop(app))
         configure_typst(settings.typst_bin)
         binary = typst_binary()

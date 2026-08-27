@@ -25,7 +25,7 @@ from ..renderers.registry_priority import render_priority
 from ..renderers.typst_renderer import (TypstError, render_typst, typst_available,
                                         typst_binary)
 from ..security import ADMIN_COOKIE, _match
-from .render import TYPST_DIR, _deliver, _sorted
+from .render import _deliver, _sorted
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -96,7 +96,20 @@ def dashboard(request: Request):
                        if k not in ("ts", "level", "logger", "message")}
             events.append({"ts": e.get("ts", ""), "message": e.get("message", ""),
                            "details": json.dumps(details, ensure_ascii=False)})
-    return _page(request, "dashboard.html", "dash",
+    beats = []
+    for kind, info in state.heartbeat.snapshot().items():
+        age = info["age_sec"]
+        if age is None:
+            status, text = "none", "ещё не было"
+        elif age < 120:
+            status, text = "ok", f"{age} с назад"
+        elif age < 3600:
+            status, text = "warn", f"{age // 60} мин назад"
+        else:
+            status, text = "warn", f"{age // 3600} ч назад"
+        beats.append({"kind": kind, "label": info["label"], "status": status,
+                      "text": text, "seen_at": info["seen_at"] or ""})
+    return _page(request, "dashboard.html", "dash", beats=beats,
                  typst=typst_available(), typst_path=typst_binary(),
                  libreoffice=shutil.which("libreoffice") is not None,
                  libreoffice_path=shutil.which("libreoffice"),
@@ -210,7 +223,7 @@ async def ops_run(request: Request, name: str):
 @router.get("/ui/render")
 def render_page(request: Request, link: str = "", link_name: str = ""):
     return _page(request, "render.html", "render", sample=SAMPLE,
-                 typst=typst_available(), typst_templates=_typst_templates(),
+                 typst=typst_available(), typst_templates=_typst_templates(request),
                  link=link, link_name=link_name)
 
 
@@ -222,7 +235,7 @@ def render_registry(request: Request, kind: str = Form(...), data: str = Form(..
         assert entries
     except (ValueError, AttributeError, AssertionError):
         return _page(request, "render.html", "render", sample=data,
-                     typst=typst_available(), typst_templates=_typst_templates(),
+                     typst=typst_available(), typst_templates=_typst_templates(request),
                      flash="Нужен JSON вида {\"request\": [...]}", flash_err=True)
     try:
         if kind == "outer":
@@ -238,7 +251,7 @@ def render_registry(request: Request, kind: str = Form(...), data: str = Form(..
     except Exception as exc:
         log.exception("ui render failed")
         return _page(request, "render.html", "render", sample=data,
-                     typst=typst_available(), typst_templates=_typst_templates(),
+                     typst=typst_available(), typst_templates=_typst_templates(request),
                      flash=f"Ошибка рендера: {exc}", flash_err=True)
     delivered = _deliver(request, workbook, name)
     return RedirectResponse(
@@ -248,19 +261,20 @@ def render_registry(request: Request, kind: str = Form(...), data: str = Form(..
 
 @router.post("/ui/render/typst")
 def render_typst_ui(request: Request, template: str = Form(...), data: str = Form(...)):
+    store = request.app.state.typst_store
     ctx = dict(sample=SAMPLE, typst=typst_available(),
-               typst_templates=_typst_templates())
+               typst_templates=_typst_templates(request))
     try:
         parsed = json.loads(data)
     except ValueError:
         return _page(request, "render.html", "render",
                      flash="Данные — не JSON", flash_err=True, **ctx)
-    path = TYPST_DIR / f"{template}.typ"
-    if "/" in template or not path.is_file():
+    source = store.get(template)
+    if source is None:
         return _page(request, "render.html", "render",
                      flash="Нет такого шаблона", flash_err=True, **ctx)
     try:
-        pdf = render_typst(path, parsed)
+        pdf = render_typst(template, source, parsed, store.assets_bytes())
     except TypstError as exc:
         return _page(request, "render.html", "render",
                      flash=f"Ошибка компиляции: {exc}", flash_err=True, **ctx)
@@ -270,5 +284,127 @@ def render_typst_ui(request: Request, template: str = Form(...), data: str = For
     return RedirectResponse(f"/ui/render?link={url}&link_name={name}", status_code=302)
 
 
-def _typst_templates() -> list[str]:
-    return sorted(p.stem for p in TYPST_DIR.glob("*.typ"))
+def _typst_templates(request: Request) -> list[str]:
+    return [t["name"] for t in request.app.state.typst_store.list_templates()]
+
+
+# --- шаблоны Typst --------------------------------------------------------
+
+NEW_TEMPLATE = '''// Новый шаблон. Данные приходят из POST-запроса:
+#let data = json(sys.inputs.data)
+
+#set page(paper: "a4", margin: 2cm)
+#set text(font: ("Liberation Sans", "Arial", "DejaVu Sans"), size: 11pt, lang: "ru")
+
+= #data.at("title", default: "Документ")
+'''
+
+TEST_DATA_DEFAULT = '{"title": "Проба"}'
+
+
+def _typst_edit_ctx(request: Request, name: str, **extra):
+    from ..renderers.typst_store import HISTORY_KEEP
+    store = request.app.state.typst_store
+    ctx = dict(name=name, source=store.get(name) or "",
+               history=store.history(name), history_keep=HISTORY_KEEP,
+               typst=typst_available(),
+               test_data=extra.pop("test_data", TEST_DATA_DEFAULT))
+    ctx.update(extra)
+    return ctx
+
+
+@router.get("/ui/typst")
+def typst_list(request: Request, flash: str = ""):
+    store = request.app.state.typst_store
+    return _page(request, "typst_list.html", "typst",
+                 rows=store.list_templates(), assets=store.list_assets(), flash=flash)
+
+
+@router.post("/ui/typst/create")
+def typst_create(request: Request, name: str = Form(...)):
+    store = request.app.state.typst_store
+    name = name.strip()
+    try:
+        if store.get(name) is None:
+            store.save(name, NEW_TEMPLATE)
+    except ValueError as exc:
+        return _page(request, "typst_list.html", "typst",
+                     rows=store.list_templates(), assets=store.list_assets(),
+                     flash=str(exc), flash_err=True)
+    return RedirectResponse(f"/ui/typst/{name}", status_code=302)
+
+
+@router.post("/ui/typst/assets/upload")
+async def typst_asset_upload(request: Request, upload: UploadFile):
+    store = request.app.state.typst_store
+    try:
+        store.save_asset((upload.filename or "").strip(), await upload.read())
+    except ValueError as exc:
+        return RedirectResponse(f"/ui/typst?flash={exc}", status_code=302)
+    audit_log("typst_asset_uploaded", name=upload.filename)
+    return RedirectResponse("/ui/typst?flash=Картинка загружена", status_code=302)
+
+
+@router.post("/ui/typst/assets/delete/{name}")
+def typst_asset_delete(request: Request, name: str):
+    request.app.state.typst_store.delete_asset(name)
+    audit_log("typst_asset_deleted", name=name)
+    return RedirectResponse("/ui/typst?flash=Картинка удалена", status_code=302)
+
+
+@router.get("/ui/typst/{name}")
+def typst_edit(request: Request, name: str, link: str = ""):
+    if request.app.state.typst_store.get(name) is None:
+        return RedirectResponse("/ui/typst", status_code=302)
+    return _page(request, "typst_edit.html", "typst",
+                 **_typst_edit_ctx(request, name, link=link))
+
+
+@router.post("/ui/typst/{name}/save")
+def typst_save(request: Request, name: str, source: str = Form(...)):
+    store = request.app.state.typst_store
+    try:
+        store.save(name, source)
+    except ValueError as exc:
+        return _page(request, "typst_edit.html", "typst",
+                     **_typst_edit_ctx(request, name), flash=str(exc), flash_err=True)
+    audit_log("typst_template_saved", name=name, size=len(source))
+    return _page(request, "typst_edit.html", "typst",
+                 **_typst_edit_ctx(request, name), flash="Сохранено")
+
+
+@router.post("/ui/typst/{name}/test")
+def typst_test(request: Request, name: str, data: str = Form(...)):
+    store = request.app.state.typst_store
+    source = store.get(name)
+    if source is None:
+        return RedirectResponse("/ui/typst", status_code=302)
+    try:
+        parsed = json.loads(data)
+    except ValueError:
+        return _page(request, "typst_edit.html", "typst",
+                     **_typst_edit_ctx(request, name, test_data=data),
+                     flash="Данные — не JSON", flash_err=True)
+    try:
+        pdf = render_typst(name, source, parsed, store.assets_bytes())
+    except TypstError as exc:
+        return _page(request, "typst_edit.html", "typst",
+                     **_typst_edit_ctx(request, name, test_data=data, error=str(exc)))
+    fname = f"{name}_{date.today()}.pdf"
+    token = request.app.state.filestore.save_bytes(pdf, ".pdf", fname)
+    url = request.app.state.filestore.download_url(token)
+    return RedirectResponse(f"/ui/typst/{name}?link={url}", status_code=302)
+
+
+@router.post("/ui/typst/{name}/restore/{history_id}")
+def typst_restore(request: Request, name: str, history_id: int):
+    request.app.state.typst_store.restore(name, history_id)
+    audit_log("typst_template_restored", name=name, history_id=history_id)
+    return RedirectResponse(f"/ui/typst/{name}", status_code=302)
+
+
+@router.post("/ui/typst/{name}/delete")
+def typst_delete(request: Request, name: str):
+    request.app.state.typst_store.delete(name)
+    audit_log("typst_template_deleted", name=name)
+    return RedirectResponse("/ui/typst?flash=Шаблон удалён", status_code=302)

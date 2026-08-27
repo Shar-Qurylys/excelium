@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} — шаблон Typst{% endblock %}
+{% block content %}
+<h1><a href="/ui/typst" class="muted" style="text-decoration:none">Шаблоны /</a> {{ name }}</h1>
+{% if link %}<div class="flash">Готово: <a href="{{ link }}">скачать PDF</a></div>{% endif %}
+<div class="card">
+  <form method="post" action="/ui/typst/{{ name }}/save">
+    <label>Текст шаблона</label>
+    <textarea name="source" rows="22" spellcheck="false">{{ source }}</textarea>
+    <button>Сохранить</button>
+    <span class="muted" style="margin-left:12px">Прежняя версия уйдёт в историю
+      (хранится {{ history_keep }})</span>
+  </form>
+</div>
+<div class="grid2">
+<div class="card">
+  <h2 style="margin-top:0">Пробный рендер</h2>
+  <form method="post" action="/ui/typst/{{ name }}/test">
+    <label>Данные (JSON)</label>
+    <textarea name="data" rows="7">{{ test_data }}</textarea>
+    <button {{ 'disabled' if not typst else '' }}>Собрать PDF</button>
+    {% if not typst %}<span class="muted" style="margin-left:12px">typst не найден</span>{% endif %}
+  </form>
+  {% if error %}<pre class="out">{{ error }}</pre>{% endif %}
+</div>
+<div class="card">
+  <h2 style="margin-top:0">История</h2>
+  {% if history %}
+  <table>
+    <tr><th>Сохранена</th><th>Размер</th><th></th></tr>
+    {% for h in history %}
+    <tr>
+      <td class="mono muted">{{ h.saved_at }}</td>
+      <td>{{ h.size }} зн.</td>
+      <td><form class="inline" method="post" action="/ui/typst/{{ name }}/restore/{{ h.id }}">
+        <button class="small">вернуть</button></form></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">Правок ещё не было.</p>{% endif %}
+  <form method="post" action="/ui/typst/{{ name }}/delete"
+        onsubmit="return confirm('Удалить шаблон {{ name }}?')">
+    <button class="danger">Удалить шаблон</button>
+  </form>
+</div>
+</div>
+{% endblock %}

@@ -40,6 +40,7 @@ def enqueue(body: NewJob, request: Request):
 @router.get("/jobs/pending")
 def pending(request: Request, consumer: str = "docv",
             limit: int = Query(default=20, ge=1, le=100)):
+    request.app.state.heartbeat.touch("jobs_poll")
     jobs = request.app.state.jobs.lease(consumer=consumer, limit=limit)
     for job in jobs:
         if job["attempts"] > MAX_ATTEMPTS_WARN:

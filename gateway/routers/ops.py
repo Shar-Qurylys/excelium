@@ -22,6 +22,7 @@ async def execute(name: str, request: Request, body: dict = Body(default={})):
     op = request.app.state.ops.get(name)
     if op is None:
         raise HTTPException(status_code=404, detail="нет такой операции")
+    request.app.state.heartbeat.touch("ops")
     params = body.get("params") or {}
     ip = request.client.host if request.client else ""
     try:

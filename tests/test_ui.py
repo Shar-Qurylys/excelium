@@ -96,3 +96,43 @@ def test_render_bad_json_flash(client):
     _login(client)
     r = client.post("/ui/render/registry", data={"kind": "inner", "data": "мусор"})
     assert "Нужен JSON" in r.text
+
+
+def test_typst_pages_and_editing(client):
+    _login(client)
+    r = client.get("/ui/typst")
+    assert r.status_code == 200 and "primer" in r.text  # засеян из templates/typst/
+    r = client.post("/ui/typst/create", data={"name": "akt_sverki"}, follow_redirects=True)
+    assert "akt_sverki" in r.text
+    r = client.post("/ui/typst/akt_sverki/save", data={"source": "= Акт сверки v2"})
+    assert "Сохранено" in r.text
+    client.post("/ui/typst/akt_sverki/save", data={"source": "= Акт сверки v3"})
+    hist = client.app.state.typst_store.history("akt_sverki")
+    assert len(hist) == 2
+    client.post(f"/ui/typst/akt_sverki/restore/{hist[0]['id']}")
+    assert client.app.state.typst_store.get("akt_sverki") == "= Акт сверки v2"
+    r = client.post("/ui/typst/akt_sverki/delete", follow_redirects=True)
+    assert "akt_sverki" not in r.text
+
+
+def test_typst_asset_upload_delete(client):
+    _login(client)
+    r = client.post("/ui/typst/assets/upload",
+                    files={"upload": ("logo.png", io.BytesIO(b"\x89PNG"), "image/png")},
+                    follow_redirects=True)
+    assert "assets/logo.png" in r.text
+    r = client.post("/ui/typst/assets/upload",
+                    files={"upload": ("hack.sh", io.BytesIO(b"#!"), "text/plain")},
+                    follow_redirects=True)
+    assert "расширение" in r.text
+    client.post("/ui/typst/assets/delete/logo.png")
+    assert client.app.state.typst_store.list_assets() == []
+
+
+def test_dashboard_heartbeat_card(client):
+    _login(client)
+    r = client.get("/ui")
+    assert "Связь с Doc-V" in r.text and "ещё не было" in r.text
+    client.get("/jobs/pending", headers={"Authorization": "Bearer test-docv-token"})
+    r = client.get("/ui")
+    assert "с назад" in r.text

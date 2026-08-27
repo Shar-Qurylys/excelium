@@ -14,6 +14,23 @@
   <div class="stat"><div class="label">Задания: в очереди / выданы / готово</div>
     <div class="value">{{ jobs.get('pending', 0) }} / {{ jobs.get('leased', 0) }} / {{ jobs.get('acked', 0) }}</div></div>
 </div>
+<div class="card">
+  <h2 style="margin-top:0">Связь с Doc-V</h2>
+  <p class="muted">«Опрос очереди» показывает, жив ли планировщик задач на
+    сервере Doc-V: точка «Шлюз → Опрос» должна дёргать очередь каждые
+    30 секунд. Планировщик не попадает в экспорт конфигурации, поэтому
+    это единственное место, где его смерть видна.</p>
+  <table>
+    <tr><th>Канал</th><th>Последний раз</th><th>Когда (UTC)</th></tr>
+    {% for b in beats %}
+    <tr>
+      <td>{{ b.label }}</td>
+      <td><span class="badge {{ 'ok' if b.status == 'ok' else ('pending' if b.status == 'warn' else 'leased') }}">{{ b.text }}</span></td>
+      <td class="mono muted">{{ b.seen_at }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
 {% if not typst or not libreoffice %}
 <div class="card">
   <h2 style="margin-top:0">PATH процесса</h2>

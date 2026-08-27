@@ -44,6 +44,7 @@ def _sanitize(value: str) -> str:
 
 
 def _deliver(request: Request, workbook, orig_name: str) -> dict:
+    request.app.state.heartbeat.touch("render")
     buf = io.BytesIO()
     workbook.save(buf)
     workbook.close()
@@ -79,13 +80,15 @@ def registry_priority(payload: RegistryPayload, request: Request):
 def render_typst_endpoint(name: str, request: Request, data: dict = Body(...)):
     if not TEMPLATE_NAME_RE.fullmatch(name):
         raise HTTPException(status_code=404)
-    template = TYPST_DIR / f"{name}.typ"
-    if not template.is_file():
+    store = request.app.state.typst_store
+    source = store.get(name)
+    if source is None:
         raise HTTPException(status_code=404, detail="нет такого шаблона")
     if not typst_available():
         raise HTTPException(status_code=503, detail="typst не установлен на сервере")
+    request.app.state.heartbeat.touch("render")
     try:
-        pdf = render_typst(template, data)
+        pdf = render_typst(name, source, data, store.assets_bytes())
     except TypstError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     token = request.app.state.filestore.save_bytes(pdf, ".pdf", f"{name}_{date.today()}.pdf")

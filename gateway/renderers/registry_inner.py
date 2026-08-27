@@ -65,7 +65,8 @@ def render_inner(entries: list[dict], template_path, matrix: ApproverMatrix):
             row += 1
 
         _add_signatures(sheet, matrix, company, object_name,
-                        expense_type=str(group[0].get("zatraty") or ""))
+                        expense_type=str(group[0].get("zatraty") or ""),
+                        signers=group[0].get("signers"))
         set_print_area(sheet, anchor_col="F", anchor_col_index=6, area="F1:I{row}")
         add_colontituls(sheet)
 
@@ -74,14 +75,20 @@ def render_inner(entries: list[dict], template_path, matrix: ApproverMatrix):
     return workbook
 
 
+UNDERLINE = "_" * 28
+
+
 def _add_signatures(sheet, matrix: ApproverMatrix, company: str, object_name: str,
-                    *, expense_type: str) -> None:
-    """Блок подписей под таблицей: директора в B2/B4 (их читают формулы
-    шаблона), согласующие — строками ниже последней позиции."""
+                    *, expense_type: str, signers: dict | None = None) -> None:
+    """Блок подписей под таблицей. signers (из payload Doc-V) включает
+    режим готовых значений; иначе — ID из матрицы + формулы шаблона."""
+    final_row = find_last_row_in_col(sheet, 6) or START_ROW - 1
+    if isinstance(signers, dict):
+        _signatures_from_payload(sheet, signers, final_row)
+        return
+
     directors, approvers = matrix.lookup(company, object_name)
     approvers = matrix.filter_for_expense_type(approvers, expense_type)
-
-    final_row = find_last_row_in_col(sheet, 6) or START_ROW - 1
 
     left_bold = Alignment(horizontal="left")
     right_bold = Alignment(horizontal="right")
@@ -100,3 +107,42 @@ def _add_signatures(sheet, matrix: ApproverMatrix, company: str, object_name: st
 
     sheet["B2"] = directors[0]
     sheet["B4"] = directors[1]
+
+
+def _person(entry: dict | None) -> tuple[str, str]:
+    """-> (должность + компания, ФИО)."""
+    if not isinstance(entry, dict):
+        return "", ""
+    line = " ".join(x for x in (str(entry.get("position") or "").strip(),
+                                str(entry.get("company") or "").strip()) if x)
+    return line, str(entry.get("fio") or "").strip()
+
+
+def _signatures_from_payload(sheet, signers: dict, final_row: int) -> None:
+    """Подписи готовыми значениями — в те же ячейки, что заполняют
+    формулы шаблона. Верх: слева «СОГЛАСОВАНО:» (F2/F3/F5), справа
+    «УТВЕРЖДАЮ» (I2/I3/I5). Ниже — согласующие с шагом в три строки;
+    запись с "mark" даёт строку-заголовок и подпись двумя ниже."""
+    left_line, left_fio = _person(signers.get("soglasovano"))
+    right_line, right_fio = _person(signers.get("utverzhdayu"))
+    sheet["F2"] = "СОГЛАСОВАНО:" if left_fio else ""
+    sheet["F3"] = left_line
+    sheet["F5"] = f"{UNDERLINE} {left_fio}" if left_fio else ""
+    if not right_fio:
+        sheet["I2"] = ""  # статичный «УТВЕРЖДАЮ» шаблона не должен висеть над пустотой
+    sheet["I3"] = right_line
+    sheet["I5"] = f"{UNDERLINE} {right_fio}" if right_fio else ""
+
+    left_bold = Alignment(horizontal="left")
+    right_bold = Alignment(horizontal="right")
+    bold14 = Font(size=14, bold=True)
+    coordinators = signers.get("coordinators") or []
+    for i, person in enumerate(coordinators, start=1):
+        row = final_row + i * 3
+        line, fio = _person(person)
+        mark = str(person.get("mark") or "").strip() if isinstance(person, dict) else ""
+        if mark:
+            set_cell_properties(sheet, row, 6, mark, None, left_bold, Font(bold=False))
+            row += 2
+        set_cell_properties(sheet, row, 6, line, None, left_bold, bold14)
+        set_cell_properties(sheet, row, 9, fio, None, right_bold, bold14)
