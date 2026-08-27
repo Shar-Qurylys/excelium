@@ -88,7 +88,8 @@ def render_typst_endpoint(name: str, request: Request, data: dict = Body(...)):
         raise HTTPException(status_code=503, detail="typst не установлен на сервере")
     request.app.state.heartbeat.touch("render")
     try:
-        pdf = render_typst(name, source, data, store.assets_bytes())
+        pdf = render_typst(name, source, data, store.assets_bytes(),
+                           verify_secret=request.app.state.settings.verify_secret)
     except TypstError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     token = request.app.state.filestore.save_bytes(pdf, ".pdf", f"{name}_{date.today()}.pdf")

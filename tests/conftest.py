@@ -22,6 +22,7 @@ def settings(tmp_path):
         token_docv=TOKEN_DOCV,
         token_ops=TOKEN_OPS,
         token_admin=TOKEN_ADMIN,
+        verify_secret="test-verify-secret",
         producer_tokens=PRODUCER_TOKENS,
         base_url="http://testserver",
         var_dir=tmp_path / "var",

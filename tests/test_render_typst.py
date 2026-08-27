@@ -45,3 +45,51 @@ def test_render_with_asset(client):
     assert r.status_code == 200, r.text
     token = r.json()["download_url"].rsplit("/", 1)[1]
     assert client.get(f"/files/{token}").content.startswith(b"%PDF")
+
+
+def test_verify_code_deterministic():
+    from gateway.renderers.typst_renderer import verify_code
+    a = verify_code({"x": 1, "y": "а"}, "s")
+    assert a == verify_code({"y": "а", "x": 1}, "s")  # порядок ключей не влияет
+    assert a != verify_code({"x": 2, "y": "а"}, "s")
+    assert a != verify_code({"x": 1, "y": "а"}, "другой-секрет")
+    assert len(a) == 14 and a.count("-") == 2
+    assert verify_code({"x": 1}, "") == ""
+
+
+@pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
+def test_meta_and_qr_available_in_template(client):
+    store = client.app.state.typst_store
+    store.save("verify_probe",
+               '#let meta = json(sys.inputs.meta)\n'
+               '#let data = json(sys.inputs.data)\n'
+               '#meta.verify_code #meta.generated_at\n'
+               '#if data.at("qr", default: "") != "" { image("qr.png", width: 2cm) }')
+    r = client.post("/render/typst/verify_probe",
+                    json={"qr": "http://192.168.30.29/doc/1"}, headers=docv_headers())
+    assert r.status_code == 200, r.text
+    token = r.json()["download_url"].rsplit("/", 1)[1]
+    assert client.get(f"/files/{token}").content.startswith(b"%PDF")
+
+
+@pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
+def test_list_soglasovaniya_full(client):
+    r = client.post("/render/typst/list_soglasovaniya", json={
+        "org": {"name": "ТОО «Шар-Кұрылыс»", "bin": "000940001102"},
+        "document_number": "12", "document_date": "01.08.2026",
+        "subject": "СМР", "counteragent": "ТОО «Подрядчик»",
+        "sum": "1 000 000", "currency": "KZT", "vat": "с НДС",
+        "rows": [{"position": "Гл. бухгалтер", "fio": "Абдрахманова Х.М.",
+                  "decision": "Согласовано", "date": "25.08.2026"}],
+        "lawyer": "Бекмуратов Е.И.",
+        "qr": "http://192.168.30.29/documents/view/1",
+    }, headers=docv_headers())
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
+def test_list_soglasovaniya_minimal(client):
+    # почти пустые данные не должны ронять компиляцию
+    r = client.post("/render/typst/list_soglasovaniya", json={"rows": []},
+                    headers=docv_headers())
+    assert r.status_code == 200, r.text

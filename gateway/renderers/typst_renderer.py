@@ -4,6 +4,13 @@
 в data.json рабочей директории, шаблон читает его через
 `json(sys.inputs.data)`. Typst-код из данных не собирается никогда.
 
+Каждому рендеру передаётся второй вход meta (json(sys.inputs.meta)):
+время формирования (Астана) и код проверки — HMAC-SHA256 от данных на
+секрете GW_VERIFY_SECRET: без секрета код не подделать, проверить можно
+повторным формированием того же документа. Если данные содержат ключ
+"qr" (строка-ссылка), шлюз сам собирает qr.png в рабочей директории —
+шаблон подключает его как #image("qr.png").
+
 Поиск бинаря. Процесс под systemd стартует с урезанным PATH
 (/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin), поэтому
 typst, поставленный через cargo в ~/.cargo/bin, в PATH не виден, хотя
@@ -11,11 +18,14 @@ typst, поставленный через cargo в ~/.cargo/bin, в PATH не �
 порядку: настройка GW_TYPST_BIN (можно абсолютный путь), PATH процесса,
 типичные каталоги установки.
 """
+import hashlib
+import hmac
 import json
 import os
 import shutil
 import subprocess
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 TIMEOUT_SEC = 30
@@ -66,8 +76,24 @@ def _executable(path: str) -> bool:
     return os.path.isfile(path) and os.access(path, os.X_OK)
 
 
+ALMATY = timezone(timedelta(hours=5))  # Казахстан един с 2024 года
+QR_LIMIT = 500
+
+
+def verify_code(data: dict, secret: str) -> str:
+    """Код подлинности: ХХХХ-ХХХХ-ХХХХ от канонического JSON данных."""
+    if not secret:
+        return ""
+    canonical = json.dumps(data, ensure_ascii=False, sort_keys=True,
+                           separators=(",", ":")).encode("utf-8")
+    digest = hmac.new(secret.encode("utf-8"), canonical, hashlib.sha256).hexdigest()
+    raw = digest[:12].upper()
+    return f"{raw[0:4]}-{raw[4:8]}-{raw[8:12]}"
+
+
 def render_typst(name: str, source: str, data: dict,
-                 assets: dict[str, bytes] | None = None) -> bytes:
+                 assets: dict[str, bytes] | None = None,
+                 *, verify_secret: str = "") -> bytes:
     """Компилирует шаблон source (имя нужно для сообщений об ошибках).
 
     Картинки assets кладутся в подпапку assets/ рабочей директории —
@@ -82,6 +108,19 @@ def render_typst(name: str, source: str, data: dict,
         (work / "data.json").write_text(json.dumps(data, ensure_ascii=False),
                                         encoding="utf-8")
         (work / f"{name}.typ").write_text(source, encoding="utf-8")
+        meta = {
+            "generated_at": datetime.now(ALMATY).strftime("%d.%m.%Y %H:%M"),
+            "verify_code": verify_code(data, verify_secret),
+        }
+        (work / "meta.json").write_text(json.dumps(meta, ensure_ascii=False),
+                                        encoding="utf-8")
+        qr_text = str(data.get("qr") or "")[:QR_LIMIT] if isinstance(data, dict) else ""
+        if qr_text:
+            import qrcode
+            qr = qrcode.QRCode(border=1, box_size=8)
+            qr.add_data(qr_text)
+            qr.make(fit=True)
+            qr.make_image(fill_color="black", back_color="white").save(work / "qr.png")
         if assets:
             (work / "assets").mkdir()
             for asset_name, blob in assets.items():
@@ -90,7 +129,8 @@ def render_typst(name: str, source: str, data: dict,
         try:
             proc = subprocess.run(
                 [binary, "compile", "--root", str(work),
-                 "--input", "data=data.json", f"{name}.typ", out.name],
+                 "--input", "data=data.json", "--input", "meta=meta.json",
+                 f"{name}.typ", out.name],
                 cwd=work, capture_output=True, text=True, timeout=TIMEOUT_SEC,
             )
         except subprocess.TimeoutExpired:

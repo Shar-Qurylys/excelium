@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     token_docv: str = ""
     token_ops: str = ""
     token_admin: str = ""  # вход в веб-интерфейс /ui
+    verify_secret: str = ""  # HMAC-код подлинности на печатных формах
     producer_tokens: dict[str, str] = {}
 
     # Адрес, по которому Doc-V скачивает файлы (не берём из Host-заголовка)
