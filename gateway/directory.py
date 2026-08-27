@@ -72,3 +72,23 @@ class DirectoryStore:
         with connect(self.db_path) as conn:
             return {r["name"]: r["n"] for r in conn.execute(
                 "SELECT name, COUNT(*) AS n FROM directories GROUP BY name").fetchall()}
+
+    def info(self) -> list[dict]:
+        """Для «Обзора»: имя, число записей, когда обновлялся, состав полей.
+
+        Ключ назван columns, а не keys: в шаблоне d.keys разрешилось бы
+        в метод словаря, а не в значение.
+        """
+        with connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT name, COUNT(*) AS n, MAX(updated_at) AS updated"
+                " FROM directories GROUP BY name ORDER BY name").fetchall()
+            out = []
+            for r in rows:
+                sample = conn.execute(
+                    "SELECT data FROM directories WHERE name = ? LIMIT 1",
+                    (r["name"],)).fetchone()
+                keys = sorted(json.loads(sample["data"]).keys()) if sample else []
+                out.append({"name": r["name"], "count": r["n"],
+                            "updated_at": r["updated"], "columns": ", ".join(keys)})
+        return out

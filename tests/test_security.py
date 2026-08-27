@@ -55,3 +55,19 @@ def test_ui_allowlist_opens_ui_but_not_api(settings):
 def test_api_allowlist_still_covers_ui(client):
     """Сервер Doc-V (allowlist) при желании тоже открывает /ui."""
     assert client.get("/ui/login").status_code == 200
+
+
+def test_ip_denial_names_the_ip(settings):
+    """Отрезанный по IP админ должен узнать причину из ответа."""
+    s = settings.model_copy(update={"allowlist": ["10.0.0.1"], "ui_allowlist": []})
+    app = create_app(s)
+    with TestClient(app) as c:
+        body = c.get("/ui").json()
+        assert body["reason"] == "ip_not_allowed"
+        assert body["client_ip"] == "testclient"
+        assert "GW_UI_ALLOWLIST" in body["hint"]
+
+
+def test_token_denial_stays_opaque(client):
+    body = client.post("/render/registry/inner", json={"request": [{}]}).json()
+    assert body == {"error": "forbidden"}  # причина только в audit

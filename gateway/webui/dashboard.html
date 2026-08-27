@@ -31,6 +31,26 @@
     {% endfor %}
   </table>
 </div>
+<div class="card">
+  <h2 style="margin-top:0">Справочники из Doc-V</h2>
+  <p class="muted">Их присылает тип «Шлюз» (POST /directory/&lt;имя&gt;). Шлюз
+    подставляет их вместо UID-ов в печатные формы, поэтому устаревший
+    справочник виден на листе как «8 знаков…?».</p>
+  {% if directories %}
+  <table>
+    <tr><th>Справочник</th><th>Записей</th><th>Обновлён (UTC)</th><th>Поля</th></tr>
+    {% for d in directories %}
+    <tr>
+      <td class="mono">{{ d.name }}</td>
+      <td>{{ d.count }}</td>
+      <td class="mono muted">{{ d.updated_at }}</td>
+      <td class="mono muted" style="font-size:12px">{{ d.columns }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">Пока не приходили. Прогоните отправку из «Шлюза» —
+    строка появится здесь.</p>{% endif %}
+</div>
 {% if not typst or not libreoffice %}
 <div class="card">
   <h2 style="margin-top:0">PATH процесса</h2>

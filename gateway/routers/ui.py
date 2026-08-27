@@ -110,6 +110,7 @@ def dashboard(request: Request):
         beats.append({"kind": kind, "label": info["label"], "status": status,
                       "text": text, "seen_at": info["seen_at"] or ""})
     return _page(request, "dashboard.html", "dash", beats=beats,
+                 directories=state.directory.info(),
                  typst=typst_available(), typst_path=typst_binary(),
                  libreoffice=shutil.which("libreoffice") is not None,
                  libreoffice_path=shutil.which("libreoffice"),

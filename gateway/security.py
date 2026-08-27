@@ -66,7 +66,13 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                    or path == "/favicon.ico" or path.startswith("/files/"))
         if not _ip_allowed(ip, self.ui_allowed if ui_path else self.api_allowed):
             audit_log("deny_ip", ip=ip, path=path)
-            return _FORBIDDEN
+            # Свой IP клиенту и так известен, а без этой подсказки админ,
+            # отрезанный по IP, не может зайти в /ui и увидеть причину.
+            return JSONResponse({"error": "forbidden", "reason": "ip_not_allowed",
+                                 "client_ip": ip,
+                                 "hint": "добавьте адрес в GW_UI_ALLOWLIST (интерфейс)"
+                                         " или GW_ALLOWLIST (API) в .env и перезапустите юнит"},
+                                status_code=403)
 
         # Пути только с IP-проверкой: health и выдача файлов (токен файла — сам секрет)
         exempt = (method == "GET" and (path == "/health" or path == "/favicon.ico"

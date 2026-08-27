@@ -207,3 +207,14 @@ def test_files_download_zip(client):
     # пустой выбор — просто возврат на страницу
     r = client.post("/ui/files/download_zip", data={}, follow_redirects=True)
     assert "Ничего не выбрано" in r.text
+
+
+def test_dashboard_shows_directories(client):
+    _login(client)
+    assert "Пока не приходили" in client.get("/ui").text
+    client.app.state.directory.replace("structura", [
+        {"uid": "u1", "display_name": "Абдрахманова Х.М.", "position": "Гл. бухгалтер",
+         "department": "Бухгалтерия"}])
+    r = client.get("/ui")
+    assert "structura" in r.text and ">1<" in r.text
+    assert "department, display_name, name, position" in r.text
