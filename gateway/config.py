@@ -1,7 +1,10 @@
 """Настройки шлюза. Источник — переменные окружения (префикс GW_) и .env."""
+import json
 from pathlib import Path
+from typing import Annotated
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 APP_DIR = Path(__file__).resolve().parent.parent
 
@@ -15,8 +18,10 @@ class Settings(BaseSettings):
     # ui_allowlist — ДОПОЛНИТЕЛЬНО для /ui, /health и /files/*
     # (машины администраторов, офисная подсеть). Оба принимают
     # адреса и подсети (CIDR).
-    allowlist: list[str] = ["192.168.30.29", "127.0.0.1", "::1"]
-    ui_allowlist: list[str] = []
+    # NoDecode: разбираем сами (см. _parse_list) — иначе pydantic требует
+    # строгий JSON и падает на списке, из которого systemd снял кавычки
+    allowlist: Annotated[list[str], NoDecode] = ["192.168.30.29", "127.0.0.1", "::1"]
+    ui_allowlist: Annotated[list[str], NoDecode] = []
     token_docv: str = ""
     token_ops: str = ""
     token_admin: str = ""  # вход в веб-интерфейс /ui
@@ -42,6 +47,27 @@ class Settings(BaseSettings):
     # Rate limit (fixed window, на процесс)
     rate_limit_per_min: int = 60
     ops_rate_limit_per_min: int = 10
+
+    @field_validator("allowlist", "ui_allowlist", mode="before")
+    @classmethod
+    def _parse_list(cls, v):
+        """Список адресов принимается и JSON-ом, и просто через запятую.
+
+        systemd в EnvironmentFile умеет снимать кавычки, превращая
+        ["a","b"] в [a,b] — строгий JSON на этом ломался, и сервис падал
+        при старте вместо того, чтобы прочитать настройку.
+        """
+        if not isinstance(v, str):
+            return v
+        v = v.strip()
+        if not v:
+            return []
+        if v.startswith("["):
+            try:
+                return json.loads(v)
+            except ValueError:
+                v = v[1:-1]  # кавычки съедены — разберём как список через запятую
+        return [x.strip().strip('"').strip("'") for x in v.split(",") if x.strip()]
 
     @property
     def db_path(self) -> Path:

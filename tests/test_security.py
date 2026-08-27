@@ -71,3 +71,26 @@ def test_ip_denial_names_the_ip(settings):
 def test_token_denial_stays_opaque(client):
     body = client.post("/render/registry/inner", json={"request": [{}]}).json()
     assert body == {"error": "forbidden"}  # причина только в audit
+
+
+def test_allowlist_accepts_any_env_form(monkeypatch):
+    """JSON, JSON без кавычек (systemd их снимает) и просто через запятую."""
+    from gateway.config import Settings
+    for raw, expected in (
+        ('["192.168.26.0/23","172.16.0.0/12"]', ["192.168.26.0/23", "172.16.0.0/12"]),
+        ("[192.168.26.0/23,172.16.0.0/12]", ["192.168.26.0/23", "172.16.0.0/12"]),
+        ("172.16.0.0/12, 192.168.26.0/23", ["172.16.0.0/12", "192.168.26.0/23"]),
+        ("", []),
+    ):
+        monkeypatch.setenv("GW_UI_ALLOWLIST", raw)
+        assert Settings(_env_file=None).ui_allowlist == expected
+
+
+def test_vpn_subnet_reaches_ui(settings):
+    """Адрес из пула VPN (172.16.0.0/12) открывает интерфейс, но не API."""
+    from gateway.security import _ip_allowed, _parse_allowlist
+    allowed = _parse_allowlist(["192.168.26.0/23", "172.16.0.0/12"])
+    assert _ip_allowed("172.16.10.1", allowed)
+    assert _ip_allowed("172.31.255.254", allowed)
+    assert not _ip_allowed("172.32.0.1", allowed)
+    assert not _ip_allowed("10.0.0.1", allowed)
