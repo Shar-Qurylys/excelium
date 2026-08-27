@@ -6,7 +6,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi import Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from .filestore.store import FileStore
 from .jobsqueue.db import init_db
@@ -63,6 +63,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         "укажите GW_TYPST_BIN или добавьте каталог в PATH юнита",
                         extra={"data": {"looked_for": settings.typst_bin,
                                         "PATH": os.environ.get("PATH", "")}})
+        # Списки — в лог при старте: так видно, что прочитал ИМЕННО
+        # работающий процесс (journalctl -u docv-gateway | grep конфигурация)
+        log.info("конфигурация прочитана", extra={"data": {
+            "allowlist_api": settings.allowlist,
+            "allowlist_ui": settings.ui_allowlist,
+            "base_url": settings.base_url,
+            "ui_enabled": bool(settings.token_admin),
+            "env_file": str(APP_DIR / ".env"),
+        }})
         log.info("gateway started")
         yield
         task.cancel()
@@ -78,6 +87,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ui.router)
     app.include_router(debug.router)
     app.include_router(directory.router)
+
+    @app.get("/", include_in_schema=False)
+    def root():
+        return RedirectResponse("/ui")
 
     @app.get("/health")
     def health():

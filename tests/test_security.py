@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from gateway.main import create_app
 
-from conftest import docv_headers, ops_headers
+from conftest import TOKEN_ADMIN, docv_headers, ops_headers
 
 
 def test_health_needs_no_token(client):
@@ -94,3 +94,21 @@ def test_vpn_subnet_reaches_ui(settings):
     assert _ip_allowed("172.31.255.254", allowed)
     assert not _ip_allowed("172.32.0.1", allowed)
     assert not _ip_allowed("10.0.0.1", allowed)
+
+
+def test_root_redirects_to_ui_and_respects_ui_allowlist(settings):
+    """Корень — «браузерный» путь: доступен из ui_allowlist и ведёт в /ui."""
+    s = settings.model_copy(update={"allowlist": ["10.0.0.1"],
+                                    "ui_allowlist": ["testclient"]})
+    app = create_app(s)
+    with TestClient(app) as c:
+        # без cookie — на форму входа, а не отказ
+        r = c.get("/", follow_redirects=False)
+        assert r.status_code == 302 and r.headers["location"] == "/ui/login"
+        c.post("/ui/login", data={"token": TOKEN_ADMIN})
+        r = c.get("/", follow_redirects=False)
+        assert r.status_code == 307 and r.headers["location"] == "/ui"
+        assert c.get("/docs").status_code == 200
+        # API из ui_allowlist по-прежнему закрыт
+        assert c.post("/render/registry/inner", json={"request": [{}]},
+                      headers=docv_headers()).status_code == 403

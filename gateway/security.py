@@ -60,10 +60,17 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         method = request.method
 
-        # Интерфейс, health и выдача файлов доступны и машинам из
-        # ui_allowlist (браузеры администраторов); API — только allowlist.
-        ui_path = (path == "/ui" or path.startswith("/ui/") or path == "/health"
-                   or path == "/favicon.ico" or path.startswith("/files/"))
+        # Три класса путей:
+        #  browser — интерфейс, корень и документация: IP из ui_allowlist,
+        #            дальше cookie администратора;
+        #  open    — health, favicon, выдача файлов: только IP (токен файла
+        #            сам себе секрет);
+        #  api     — всё остальное: строгий allowlist + bearer по скоупу.
+        browser_path = (path in ("/", "/ui", "/docs", "/redoc", "/openapi.json")
+                        or path.startswith("/ui/"))
+        open_path = (method == "GET" and (path in ("/health", "/favicon.ico")
+                                          or path.startswith("/files/")))
+        ui_path = browser_path or open_path
         if not _ip_allowed(ip, self.ui_allowed if ui_path else self.api_allowed):
             audit_log("deny_ip", ip=ip, path=path)
             # Свой IP клиенту и так известен, а без этой подсказки админ,
@@ -74,12 +81,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                                          " или GW_ALLOWLIST (API) в .env и перезапустите юнит"},
                                 status_code=403)
 
-        # Пути только с IP-проверкой: health и выдача файлов (токен файла — сам секрет)
-        exempt = (method == "GET" and (path == "/health" or path == "/favicon.ico"
-                                       or path.startswith("/files/")))
-
-        if not exempt:
-            if path == "/ui" or path.startswith("/ui/"):
+        if not open_path:
+            if browser_path:
                 verdict = self._check_ui(request, path)
                 if verdict is not None:
                     return verdict
