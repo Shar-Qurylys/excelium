@@ -152,3 +152,26 @@ def test_directory_sweep_stale(client):
 
 def test_db_file_permissions(client):
     assert oct(client.settings.db_path.stat().st_mode & 0o777) == "0o600"
+
+
+def test_directory_display_name_normalized(client):
+    client.post("/directory/structura", headers=docv_headers(), json=[
+        {"uid": "u1", "display_name": "Абдрахманова Х.М.",
+         "position": "Главный бухгалтер", "department": "Бухгалтерия"}])
+    entry = client.app.state.directory.all()["structura"]["u1"]
+    assert entry["name"] == "Абдрахманова Х.М."
+    assert entry["position"] == "Главный бухгалтер"
+    assert entry["department"] == "Бухгалтерия"
+
+
+@pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
+def test_approved_by_position_from_structura_entry(client):
+    """Должность берётся из записи сотрудника — справочник должностей не нужен."""
+    client.post("/directory/structura", headers=docv_headers(), json=[
+        {"uid": "p-9", "display_name": "Омарова Г.А.", "position": "Финансовый директор",
+         "department": "Финансы"}])
+    r = client.post("/render/typst/list_soglasovaniya", json={
+        "document_number": "1",
+        "approved_by": [[["1", "1", "p-9", "d-неизвестен-uid-длинный", "2026-08-20T14:48:47+05:00", "", "1"]]],
+    }, headers=docv_headers())
+    assert r.status_code == 200, r.text

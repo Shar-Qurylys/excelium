@@ -34,6 +34,10 @@ class DirectoryStore:
                 continue
             uid = str(item["uid"]).strip()
             payload = {k: v for k, v in item.items() if k != "uid"}
+            # выгрузка Doc-V шлёт display_name — нормализуем в name,
+            # чтобы шаблоны смотрели на один ключ
+            if "name" not in payload and "display_name" in payload:
+                payload["name"] = payload["display_name"]
             rows.append((name, uid, json.dumps(payload, ensure_ascii=False), now))
         with connect(self.db_path) as conn:
             conn.execute("DELETE FROM directories WHERE name = ?", (name,))
