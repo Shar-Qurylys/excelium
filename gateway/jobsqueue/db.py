@@ -67,3 +67,4 @@ def init_db(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with connect(path) as conn:
         conn.executescript(_SCHEMA)
+    path.chmod(0o600)  # в базе персональные данные и файлы реестров

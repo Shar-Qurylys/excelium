@@ -50,6 +50,20 @@ class DirectoryStore:
                 out.setdefault(r["name"], {})[r["uid"]] = json.loads(r["data"])
         return out
 
+    def sweep(self, keep_days: int = 30) -> int:
+        """Удаляет справочники, которые не обновлялись keep_days дней:
+        заброшенная выгрузка не должна оставлять данные лежать вечно."""
+        from datetime import timedelta
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=keep_days)).isoformat(
+            timespec="seconds")
+        with connect(self.db_path) as conn:
+            stale = [r["name"] for r in conn.execute(
+                "SELECT name FROM directories GROUP BY name"
+                " HAVING MAX(updated_at) < ?", (cutoff,)).fetchall()]
+            for name in stale:
+                conn.execute("DELETE FROM directories WHERE name = ?", (name,))
+        return len(stale)
+
     def stats(self) -> dict[str, int]:
         with connect(self.db_path) as conn:
             return {r["name"]: r["n"] for r in conn.execute(

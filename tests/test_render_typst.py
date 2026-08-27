@@ -136,3 +136,19 @@ def test_approved_by_resolved_via_directory(client):
         "approved_by": [[["1", "1", "p-1", "d-1", "2026-08-20T14:48:47+05:00", "", "1"]]],
     }, headers=docv_headers())
     assert r.status_code == 200, r.text
+
+
+def test_directory_sweep_stale(client):
+    from datetime import datetime, timedelta, timezone
+    from gateway.jobsqueue.db import connect
+    store = client.app.state.directory
+    store.replace("structura", [{"uid": "x", "name": "Тест"}])
+    old = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat(timespec="seconds")
+    with connect(client.settings.db_path) as conn:
+        conn.execute("UPDATE directories SET updated_at = ?", (old,))
+    assert store.sweep() == 1
+    assert store.stats() == {}
+
+
+def test_db_file_permissions(client):
+    assert oct(client.settings.db_path.stat().st_mode & 0o777) == "0o600"

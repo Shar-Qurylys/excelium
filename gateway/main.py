@@ -101,6 +101,7 @@ async def _sweep_loop(app: FastAPI) -> None:
         try:
             await asyncio.to_thread(app.state.filestore.sweep)
             await asyncio.to_thread(app.state.jobs.sweep)
+            await asyncio.to_thread(app.state.directory.sweep)
         except Exception:
             log.exception("sweep failed")
 
