@@ -164,16 +164,69 @@ def files_page(request: Request, flash: str = ""):
 
 
 @router.post("/ui/files/upload")
-async def files_upload(request: Request, upload: UploadFile):
-    data = await upload.read()
-    name = upload.filename or "file"
-    suffix = "." + name.rsplit(".", 1)[1].lower() if "." in name else ".bin"
-    try:
-        request.app.state.filestore.save_bytes(data, suffix, name)
-    except ValueError:
-        request.app.state.filestore.save_bytes(data, ".bin", name)
-    audit_log("ui_file_uploaded", name=name, size=len(data))
-    return RedirectResponse("/ui/files?flash=Файл загружен", status_code=302)
+async def files_upload(request: Request, uploads: list[UploadFile]):
+    count = 0
+    for upload in uploads:
+        data = await upload.read()
+        if not data and not upload.filename:
+            continue
+        name = upload.filename or "file"
+        suffix = "." + name.rsplit(".", 1)[1].lower() if "." in name else ".bin"
+        try:
+            request.app.state.filestore.save_bytes(data, suffix, name)
+        except ValueError:
+            request.app.state.filestore.save_bytes(data, ".bin", name)
+        audit_log("ui_file_uploaded", name=name, size=len(data))
+        count += 1
+    word = "Файл загружен" if count == 1 else f"Загружено файлов: {count}"
+    return RedirectResponse(f"/ui/files?flash={word}", status_code=302)
+
+
+@router.post("/ui/files/rename/{token}")
+def files_rename(request: Request, token: str, new_name: str = Form(...)):
+    store = request.app.state.filestore
+    resolved = store.resolve(token)
+    if resolved is None:
+        return RedirectResponse("/ui/files?flash=Файл не найден", status_code=302)
+    path, _ = resolved
+    name = new_name.strip()
+    if name and not name.lower().endswith(path.suffix.lower()):
+        name += path.suffix  # расширение не теряем
+    if not store.rename(token, name):
+        return RedirectResponse("/ui/files?flash=Не переименован", status_code=302)
+    audit_log("ui_file_renamed", token=token, name=name)
+    return RedirectResponse("/ui/files?flash=Переименовано", status_code=302)
+
+
+@router.post("/ui/files/download_zip")
+def files_download_zip(request: Request, tokens: list[str] = Form(default=[])):
+    import io as _io
+    import zipfile
+    from datetime import date as _date
+    from fastapi import Response
+    store = request.app.state.filestore
+    buf = _io.BytesIO()
+    used, count = set(), 0
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for token in tokens[:200]:
+            resolved = store.resolve(token)
+            if resolved is None:
+                continue
+            path, orig_name = resolved
+            arcname, n = orig_name, 1
+            while arcname in used:
+                stem, _, ext = orig_name.rpartition(".")
+                arcname = f"{stem}_{n}.{ext}" if ext else f"{orig_name}_{n}"
+                n += 1
+            used.add(arcname)
+            zf.write(path, arcname=arcname)
+            count += 1
+    if not count:
+        return RedirectResponse("/ui/files?flash=Ничего не выбрано", status_code=302)
+    audit_log("ui_files_zip", count=count)
+    fname = f"files_{_date.today()}.zip"
+    return Response(content=buf.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 @router.post("/ui/files/delete/{token}")
@@ -338,14 +391,21 @@ def typst_create(request: Request, name: str = Form(...)):
 
 
 @router.post("/ui/typst/assets/upload")
-async def typst_asset_upload(request: Request, upload: UploadFile):
+async def typst_asset_upload(request: Request, uploads: list[UploadFile]):
     store = request.app.state.typst_store
-    try:
-        store.save_asset((upload.filename or "").strip(), await upload.read())
-    except ValueError as exc:
-        return RedirectResponse(f"/ui/typst?flash={exc}", status_code=302)
-    audit_log("typst_asset_uploaded", name=upload.filename)
-    return RedirectResponse("/ui/typst?flash=Картинка загружена", status_code=302)
+    count = 0
+    for upload in uploads:
+        if not upload.filename:
+            continue
+        try:
+            store.save_asset(upload.filename.strip(), await upload.read())
+        except ValueError as exc:
+            return RedirectResponse(f"/ui/typst?flash={upload.filename}: {exc}",
+                                    status_code=302)
+        audit_log("typst_asset_uploaded", name=upload.filename)
+        count += 1
+    word = "Картинка загружена" if count == 1 else f"Загружено картинок: {count}"
+    return RedirectResponse(f"/ui/typst?flash={word}", status_code=302)
 
 
 @router.post("/ui/typst/assets/delete/{name}")

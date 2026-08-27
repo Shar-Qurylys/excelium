@@ -74,6 +74,15 @@ class FileStore:
                         "size": path.stat().st_size if path.is_file() else 0})
         return out
 
+    def rename(self, token: str, new_name: str) -> bool:
+        """Меняет отображаемое имя (имя на диске остаётся токеном)."""
+        if not TOKEN_RE.fullmatch(token) or not new_name.strip():
+            return False
+        with connect(self.settings.db_path) as conn:
+            cur = conn.execute("UPDATE files SET orig_name = ? WHERE token = ?",
+                               (new_name.strip(), token))
+        return cur.rowcount > 0
+
     def delete(self, token: str) -> bool:
         if not TOKEN_RE.fullmatch(token):
             return False

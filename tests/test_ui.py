@@ -54,7 +54,7 @@ def test_jobs_bad_payload(client):
 def test_files_upload_and_delete(client):
     _login(client)
     r = client.post("/ui/files/upload",
-                    files={"upload": ("устав.pdf", io.BytesIO(b"%PDF-fake"), "application/pdf")},
+                    files={"uploads": ("устав.pdf", io.BytesIO(b"%PDF-fake"), "application/pdf")},
                     follow_redirects=True)
     assert "устав.pdf" in r.text
     token = client.app.state.filestore.list_files()[0]["token"]
@@ -118,11 +118,11 @@ def test_typst_pages_and_editing(client):
 def test_typst_asset_upload_delete(client):
     _login(client)
     r = client.post("/ui/typst/assets/upload",
-                    files={"upload": ("logo.png", io.BytesIO(b"\x89PNG"), "image/png")},
+                    files={"uploads": ("logo.png", io.BytesIO(b"\x89PNG"), "image/png")},
                     follow_redirects=True)
     assert "assets/logo.png" in r.text
     r = client.post("/ui/typst/assets/upload",
-                    files={"upload": ("hack.sh", io.BytesIO(b"#!"), "text/plain")},
+                    files={"uploads": ("hack.sh", io.BytesIO(b"#!"), "text/plain")},
                     follow_redirects=True)
     assert "расширение" in r.text
     client.post("/ui/typst/assets/delete/logo.png")
@@ -170,3 +170,40 @@ def test_file_to_assets_translit_name(client):
     r = client.post(f"/ui/files/to_assets/{token}", follow_redirects=True)
     assert "assets/logotip_shar.png" in r.text  # кириллица транслитерирована
     assert "logotip_shar.png" in client.app.state.typst_store.assets_bytes()
+
+
+def test_files_multi_upload(client):
+    _login(client)
+    r = client.post("/ui/files/upload", files=[
+        ("uploads", ("а.txt", io.BytesIO(b"1"), "text/plain")),
+        ("uploads", ("б.txt", io.BytesIO(b"2"), "text/plain")),
+    ], follow_redirects=True)
+    assert "Загружено файлов: 2" in r.text
+    assert len(client.app.state.filestore.list_files()) == 2
+
+
+def test_files_rename_keeps_extension(client):
+    _login(client)
+    token = client.app.state.filestore.save_bytes(b"x", ".xlsx", "реестр.xlsx")
+    r = client.post(f"/ui/files/rename/{token}", data={"new_name": "реестр август"},
+                    follow_redirects=True)
+    assert "Переименовано" in r.text
+    _, name = client.app.state.filestore.resolve(token)
+    assert name == "реестр август.xlsx"
+
+
+def test_files_download_zip(client):
+    import zipfile
+    _login(client)
+    store = client.app.state.filestore
+    t1 = store.save_bytes("один".encode(), ".txt", "документ.txt")
+    t2 = store.save_bytes("два".encode(), ".txt", "документ.txt")  # дубль имени
+    r = client.post("/ui/files/download_zip", data={"tokens": [t1, t2]})
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/zip"
+    zf = zipfile.ZipFile(io.BytesIO(r.content))
+    assert sorted(zf.namelist()) == ["документ.txt", "документ_1.txt"]
+    assert zf.read("документ.txt") == "один".encode()
+    # пустой выбор — просто возврат на страницу
+    r = client.post("/ui/files/download_zip", data={}, follow_redirects=True)
+    assert "Ничего не выбрано" in r.text

@@ -48,8 +48,8 @@
   </table>
   {% endif %}
   <form method="post" action="/ui/typst/assets/upload" enctype="multipart/form-data">
-    <label>Загрузить картинку</label>
-    <input type="file" name="upload" accept=".png,.jpg,.jpeg,.gif,.svg">
+    <label>Загрузить картинки <span class="hint">— можно несколько сразу</span></label>
+    <input type="file" name="uploads" multiple accept=".png,.jpg,.jpeg,.gif,.svg">
     <button>Загрузить</button>
   </form>
 </div>

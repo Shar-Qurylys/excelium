@@ -4,32 +4,45 @@
 <h1>Хранилище файлов</h1>
 <div class="card">
   <form method="post" action="/ui/files/upload" enctype="multipart/form-data">
-    <label>Загрузить файл <span class="hint">— получит токен, годится параметром
-      для операций; истечёт через {{ ttl_hours }} ч.</span></label>
-    <input type="file" name="upload">
+    <label>Загрузить файлы <span class="hint">— можно несколько сразу; каждый
+      получит токен и истечёт через {{ ttl_hours }} ч.</span></label>
+    <input type="file" name="uploads" multiple>
     <button>Загрузить</button>
   </form>
 </div>
 <div class="card">
   {% if rows %}
+  <form id="dlform" method="post" action="/ui/files/download_zip"></form>
   <table>
-    <tr><th></th><th>Имя</th><th>Токен</th><th>Размер</th><th>Создан</th><th></th></tr>
+    <tr><th></th><th></th><th>Имя <span class="hint">(правится на месте)</span></th>
+        <th>Размер</th><th>Создан</th><th></th></tr>
     {% for f in rows %}
     <tr>
+      <td><input type="checkbox" name="tokens" value="{{ f.token }}" form="dlform"></td>
       <td>{% if f.is_image %}<img src="/files/{{ f.token }}" alt=""
         style="height:44px;max-width:90px;object-fit:contain;border:1px solid var(--line);border-radius:4px;background:#fff">{% endif %}</td>
-      <td><a href="/files/{{ f.token }}">{{ f.orig_name }}</a></td>
-      <td class="mono muted">{{ f.token }}</td>
+      <td>
+        <form class="inline" method="post" action="/ui/files/rename/{{ f.token }}"
+              style="display:flex;gap:6px;align-items:center">
+          <input type="text" name="new_name" value="{{ f.orig_name }}"
+                 style="width:240px;padding:4px 8px">
+          <button class="small" title="Переименовать">✓</button>
+        </form>
+      </td>
       <td>{{ "%.1f"|format(f.size / 1024) }} КБ</td>
       <td class="mono muted">{{ f.created_at }}</td>
-      <td>{% if f.is_image %}<form class="inline" method="post" action="/ui/files/to_assets/{{ f.token }}">
-        <button class="small" title="Скопировать в «Картинки» — станет доступна шаблонам как assets/{{ f.orig_name }}">в Картинки</button></form>
-        {% endif %}
+      <td style="white-space:nowrap">
+        <a class="btn small" style="margin:0;padding:3px 10px;font-size:13px"
+           href="/files/{{ f.token }}">скачать</a>
+        {% if f.is_image %}<form class="inline" method="post" action="/ui/files/to_assets/{{ f.token }}">
+          <button class="small" title="Станет доступна шаблонам как assets/…">в Картинки</button></form>{% endif %}
         <form class="inline" method="post" action="/ui/files/delete/{{ f.token }}">
-        <button class="small danger">удалить</button></form></td>
+          <button class="small danger">удалить</button></form>
+      </td>
     </tr>
     {% endfor %}
   </table>
+  <button form="dlform" style="margin-top:14px">Скачать выбранные одним архивом</button>
   {% else %}<p class="muted">Хранилище пусто.</p>{% endif %}
 </div>
 {% endblock %}
