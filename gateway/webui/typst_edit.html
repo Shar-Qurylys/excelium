@@ -24,6 +24,21 @@
   {% if error %}<pre class="out">{{ error }}</pre>{% endif %}
 </div>
 <div class="card">
+  <h2 style="margin-top:0">Доступные картинки</h2>
+  {% if assets %}
+  <table>
+    {% for a in assets %}
+    <tr>
+      <td><img src="/ui/typst/assets/raw/{{ a.name }}" alt=""
+        style="height:40px;max-width:80px;object-fit:contain;border:1px solid var(--line);border-radius:4px;background:#fff"></td>
+      <td class="mono" style="font-size:12px">#image("assets/{{ a.name }}")</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">Картинок нет — загрузите на странице
+    «Шаблоны» или перенесите из «Файлов».</p>{% endif %}
+</div>
+<div class="card">
   <h2 style="margin-top:0">История</h2>
   {% if history %}
   <table>

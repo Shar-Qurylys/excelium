@@ -13,14 +13,19 @@
 <div class="card">
   {% if rows %}
   <table>
-    <tr><th>Имя</th><th>Токен</th><th>Размер</th><th>Создан</th><th></th></tr>
+    <tr><th></th><th>Имя</th><th>Токен</th><th>Размер</th><th>Создан</th><th></th></tr>
     {% for f in rows %}
     <tr>
+      <td>{% if f.is_image %}<img src="/files/{{ f.token }}" alt=""
+        style="height:44px;max-width:90px;object-fit:contain;border:1px solid var(--line);border-radius:4px;background:#fff">{% endif %}</td>
       <td><a href="/files/{{ f.token }}">{{ f.orig_name }}</a></td>
       <td class="mono muted">{{ f.token }}</td>
       <td>{{ "%.1f"|format(f.size / 1024) }} КБ</td>
       <td class="mono muted">{{ f.created_at }}</td>
-      <td><form class="inline" method="post" action="/ui/files/delete/{{ f.token }}">
+      <td>{% if f.is_image %}<form class="inline" method="post" action="/ui/files/to_assets/{{ f.token }}">
+        <button class="small" title="Скопировать в «Картинки» — станет доступна шаблонам как assets/{{ f.orig_name }}">в Картинки</button></form>
+        {% endif %}
+        <form class="inline" method="post" action="/ui/files/delete/{{ f.token }}">
         <button class="small danger">удалить</button></form></td>
     </tr>
     {% endfor %}

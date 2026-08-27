@@ -33,9 +33,11 @@
     png/jpg/gif/svg.</p>
   {% if assets %}
   <table>
-    <tr><th>Имя</th><th>Размер</th><th>Загружена</th><th></th></tr>
+    <tr><th></th><th>Имя</th><th>Размер</th><th>Загружена</th><th></th></tr>
     {% for a in assets %}
     <tr>
+      <td><img src="/ui/typst/assets/raw/{{ a.name }}" alt=""
+        style="height:44px;max-width:90px;object-fit:contain;border:1px solid var(--line);border-radius:4px;background:#fff"></td>
       <td class="mono">assets/{{ a.name }}</td>
       <td>{{ "%.1f"|format(a.size / 1024) }} КБ</td>
       <td class="mono muted">{{ a.updated_at }}</td>

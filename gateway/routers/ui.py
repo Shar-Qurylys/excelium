@@ -156,8 +156,10 @@ def jobs_new(request: Request, type: str = Form(...), payload: str = Form(...)):
 
 @router.get("/ui/files")
 def files_page(request: Request, flash: str = ""):
-    return _page(request, "files.html", "files",
-                 rows=request.app.state.filestore.list_files(),
+    rows = request.app.state.filestore.list_files()
+    for f in rows:
+        f["is_image"] = f["suffix"].lower() in IMAGE_SUFFIXES
+    return _page(request, "files.html", "files", rows=rows,
                  ttl_hours=request.app.state.settings.file_ttl_hours, flash=flash)
 
 
@@ -308,7 +310,7 @@ def _typst_edit_ctx(request: Request, name: str, **extra):
     store = request.app.state.typst_store
     ctx = dict(name=name, source=store.get(name) or "",
                history=store.history(name), history_keep=HISTORY_KEEP,
-               typst=typst_available(),
+               typst=typst_available(), assets=store.list_assets(),
                test_data=extra.pop("test_data", TEST_DATA_DEFAULT))
     ctx.update(extra)
     return ctx
@@ -410,3 +412,52 @@ def typst_delete(request: Request, name: str):
     request.app.state.typst_store.delete(name)
     audit_log("typst_template_deleted", name=name)
     return RedirectResponse("/ui/typst?flash=Шаблон удалён", status_code=302)
+
+
+# --- картинки: отдача и перенос из «Файлов» -------------------------------
+
+ASSET_MEDIA = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+               ".gif": "image/gif", ".svg": "image/svg+xml"}
+IMAGE_SUFFIXES = set(ASSET_MEDIA)
+
+
+@router.get("/ui/typst/assets/raw/{name}")
+def typst_asset_raw(request: Request, name: str):
+    from fastapi import Response
+    data = request.app.state.typst_store.assets_bytes().get(name)
+    if data is None:
+        return Response(status_code=404)
+    suffix = "." + name.rsplit(".", 1)[-1].lower()
+    return Response(content=data, media_type=ASSET_MEDIA.get(suffix, "application/octet-stream"),
+                    headers={"Cache-Control": "private, max-age=300"})
+
+
+def _asset_name(orig_name: str) -> str:
+    """Имя файла -> допустимое имя картинки: транслитерация кириллицы,
+    пробелы и прочее -> подчёркивание."""
+    import re as _re
+    stem, _, ext = orig_name.rpartition(".")
+    try:
+        from transliterate import translit
+        stem = translit(stem, "ru", reversed=True)
+    except Exception:
+        pass
+    stem = _re.sub(r"[^A-Za-z0-9_-]+", "_", stem).strip("_") or "img"
+    return f"{stem[:60]}.{ext.lower()}"
+
+
+@router.post("/ui/files/to_assets/{token}")
+def file_to_assets(request: Request, token: str):
+    """Файл-изображение из «Файлов» -> «Картинки» (доступно шаблонам)."""
+    resolved = request.app.state.filestore.resolve(token)
+    if resolved is None:
+        return RedirectResponse("/ui/files?flash=Файл не найден", status_code=302)
+    path, orig_name = resolved
+    name = _asset_name(orig_name)
+    try:
+        request.app.state.typst_store.save_asset(name, path.read_bytes())
+    except ValueError as exc:
+        return RedirectResponse(f"/ui/files?flash=Не перенесён: {exc}", status_code=302)
+    audit_log("file_to_assets", token=token, name=name)
+    return RedirectResponse(f"/ui/typst?flash=Картинка доступна шаблонам: assets/{name}",
+                            status_code=302)

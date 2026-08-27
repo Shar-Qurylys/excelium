@@ -136,3 +136,37 @@ def test_dashboard_heartbeat_card(client):
     client.get("/jobs/pending", headers={"Authorization": "Bearer test-docv-token"})
     r = client.get("/ui")
     assert "с назад" in r.text
+
+
+def test_asset_raw_and_thumbnails(client):
+    _login(client)
+    client.app.state.typst_store.save_asset("logo.png", b"\x89PNG-data")
+    r = client.get("/ui/typst/assets/raw/logo.png")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+    assert client.get("/ui/typst/assets/raw/net.png").status_code == 404
+    r = client.get("/ui/typst")
+    assert "/ui/typst/assets/raw/logo.png" in r.text  # миниатюра в списке
+    r = client.get("/ui/typst/primer")
+    assert '#image(&#34;assets/logo.png&#34;)' in r.text or 'assets/logo.png' in r.text
+
+
+def test_file_to_assets_one_click(client):
+    _login(client)
+    store = client.app.state.filestore
+    token = store.save_bytes(b"\x89PNG-blank", ".png", "blank_shar.png")
+    r = client.get("/ui/files")
+    assert f"/ui/files/to_assets/{token}" in r.text  # кнопка есть у картинки
+    r = client.post(f"/ui/files/to_assets/{token}", follow_redirects=True)
+    assert "доступна шаблонам" in r.text
+    assert client.app.state.typst_store.assets_bytes()["blank_shar.png"] == b"\x89PNG-blank"
+    # не-картинка кнопки не имеет
+    t2 = store.save_bytes(b"x", ".xlsx", "реестр.xlsx")
+    assert f"/ui/files/to_assets/{t2}" not in client.get("/ui/files").text
+
+
+def test_file_to_assets_translit_name(client):
+    _login(client)
+    token = client.app.state.filestore.save_bytes(b"\x89PNG", ".png", "логотип шар.png")
+    r = client.post(f"/ui/files/to_assets/{token}", follow_redirects=True)
+    assert "assets/logotip_shar.png" in r.text  # кириллица транслитерирована
+    assert "logotip_shar.png" in client.app.state.typst_store.assets_bytes()
