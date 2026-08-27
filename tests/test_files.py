@@ -25,3 +25,16 @@ def test_sweep_removes_expired(client):
         conn.execute("UPDATE files SET created_at = ? WHERE token = ?", (old, token))
     assert store.sweep() >= 1
     assert client.get(f"/files/{token}").status_code == 404
+
+
+def test_debug_echo(client):
+    from conftest import docv_headers
+    r = client.post("/debug/echo", headers=docv_headers(),
+                    json={"Регистрационный номер": "12-СМР", "Сумма договора": 1000000})
+    body = r.json()
+    assert r.status_code == 200
+    assert "Регистрационный номер" in body["received"]
+    token = body["saved_as"].rsplit("/", 1)[1]
+    assert "12-СМР" in client.get(f"/files/{token}").text
+    # без токена — 403
+    assert client.post("/debug/echo", json={}).status_code == 403

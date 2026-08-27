@@ -20,7 +20,7 @@ from .renderers.typst_renderer import configure as configure_typst
 from .renderers.typst_renderer import typst_available, typst_binary
 from .opsrunner.registry import load_registry
 from .jobsqueue.service import JobQueue
-from .routers import files, jobs, ops, render, ui
+from .routers import debug, files, jobs, ops, render, ui
 from .security import SecurityMiddleware
 
 log = logging.getLogger(__name__)
@@ -74,6 +74,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ops.router)
     app.include_router(jobs.router)
     app.include_router(ui.router)
+    app.include_router(debug.router)
 
     @app.get("/health")
     def health():
