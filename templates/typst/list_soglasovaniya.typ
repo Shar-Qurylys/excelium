@@ -1,29 +1,27 @@
 // ЛИСТ СОГЛАСОВАНИЯ ДОКУМЕНТА — печатная форма по образцу карточки
 // договора Doc-V.
 //
-// POST /render/typst/list_soglasovaniya. Пример данных:
+// POST /render/typst/list_soglasovaniya. Контракт (собирается в Doc-V
+// методом add_key, лишние ключи игнорируются, пустые не печатаются):
 // {
-//   "org": {"name": "ТОО «Шар-Кұрылыс»", "bin": "000940001102",
-//           "logo": "org_shar.png",                   // логотип — из «Картинок», можно опустить
-//           "blank": "blank_shar.png",                // фирменный бланк подложкой всей страницы
-//           "top_margin": 4.2},                       // отступ (см) под шапку бланка; низ 2.4 см
-//   С "blank" текстовая шапка (название/БИН/логотип) не печатается —
-//   бланк уже несёт её. PNG бланка делает операция blank_to_png.
-//   "document_number": "12-СМР", "document_date": "01.08.2026",
-//   "subject": "Строительно-монтажные работы ...",
-//   "initiator": "Иванов И.И., инженер ПТО",
-//   "counteragent": "ТОО «Подрядчик»",
-//   "storona_gk": "ТОО «Шар-Кұрылыс»",
-//   "object": "ЖК \"Grand Victoria 3\"",
-//   "sum": "12 500 000,00", "currency": "KZT", "vat": "с НДС",
-//   "avans": "3 000 000,00",
-//   "srok": "120", "srok_unit": "календарных дней",
-//   "notes": "Особые условия ...",
-//   "rows": [{"position": "Главный бухгалтер", "company": "ТОО «Шар-Кұрылыс»",
-//             "fio": "Абдрахманова Х.М.", "decision": "Согласовано",
-//             "date": "25.08.2026 14:02", "comment": ""}],
-//   "lawyer": "Бекмуратов Е.И.",
-//   "qr": "адрес карточки документа"                  // шлюз сам построит qr.png; можно опустить
+//   "organization": "ТОО «Шар-Кұрылыс»",        // сторона ГК
+//   "document_number": "0099/test/adm",
+//   "document_date": "25.08.2026",              // строкой, как на карточке
+//   "subject": "Обучение БИОТ",
+//   "initiator": "Фамилия Имя (должность)",
+//   "department": "Отдел по управлению персоналом",
+//   "counteragent": "ТОО «Test»",
+//   "object": "Администрация",
+//   "sum": [{"sum": 144000, "currency": "KZT", "vat": "с НДС"}],
+//   "pre_payment": 0,                            // 0 = строка не печатается
+//   "work_due": "Обучение БИОТ",
+//   "special_conditions": "",
+//   "lawyer": "",
+//   "rows": [{"fio": "...", "position": "...", "decision": "Согласен",
+//             "date": "...", "comment": "..."}],
+//   "org": {"name": "...", "bin": "...", "logo": "...",   // шапка бланка,
+//           "blank": "blank_shar.png", "top_margin": 4.2}, // можно опустить
+//   "qr": "адрес карточки"                       // можно опустить
 // }
 // Пустые поля не печатаются. Блок подлинности (QR + код проверки +
 // время формирования) шлюз добавляет сам через sys.inputs.meta.
@@ -73,8 +71,9 @@
 
 // ---- реквизиты документа --------------------------------------------------
 #let val(..keys) = {
-  // склейка непустых значений через пробел
-  keys.pos().map(k => str(data.at(k, default: ""))).filter(x => x != "").join(" ")
+  // склейка непустых значений через пробел (join пустого массива даёт none)
+  let joined = keys.pos().map(k => str(data.at(k, default: ""))).filter(x => x != "").join(" ")
+  if joined == none { "" } else { joined }
 }
 #let rows = ()
 #let add(label, value) = { if value != none and value != "" { ((label, value),) } else { () } }
@@ -85,6 +84,37 @@
   if n != "" and d != "" [№ #n от #d] else if n != "" [№ #n] else [#d]
 }
 
+// число -> "144 000" / "144 000,50"
+#let fmtnum(n) = {
+  if type(n) == int or type(n) == float {
+    let s = str(n).replace(".", ",")
+    let parts = s.split(",")
+    let int-part = parts.at(0)
+    let group(x) = if x.len() <= 3 { x } else {
+      group(x.slice(0, x.len() - 3)) + " " + x.slice(x.len() - 3) }
+    group(int-part) + (if parts.len() > 1 { "," + parts.at(1) } else { "" })
+  } else { str(n) }
+}
+
+// [{"sum": 144000, "currency": "KZT", "vat": "с НДС"}] -> "144 000 KZT с НДС"
+#let sum_line = {
+  let raw = data.at("sum", default: ())
+  if type(raw) == array {
+    raw.map(e => (fmtnum(e.at("sum", default: "")), str(e.at("currency", default: "")),
+                  str(e.at("vat", default: ""))).filter(x => x != "").join(" "))
+       .join("; ")
+  } else { str(raw) }
+}
+
+#let avans_line = {
+  let a = data.at("pre_payment", default: "")
+  if a == "" or a == 0 or a == "0" { "" } else {
+    let cur = if type(data.at("sum", default: ())) == array and data.sum.len() > 0 {
+      str(data.sum.at(0).at("currency", default: "")) } else { "" }
+    (fmtnum(a) + " " + cur).trim()
+  }
+}
+
 #grid(
   columns: (4.6cm, 1fr),
   column-gutter: 1em,
@@ -93,13 +123,14 @@
     add([*Основной договор:*], doc_line)
     + add([*Предмет договора:*], val("subject"))
     + add([*Инициатор:*], val("initiator"))
+    + add([*Отдел:*], val("department"))
     + add([*Контрагент:*], val("counteragent"))
-    + add([*Сторона ГК:*], val("storona_gk"))
+    + add([*Сторона ГК:*], val("organization"))
     + add([*Наименование объекта:*], val("object"))
-    + add([*Сумма по договору:*], val("sum", "currency", "vat"))
-    + add([*Порядок оплат, аванс:*], val("avans", "currency"))
-    + add([*Срок выполнения работ:*], val("srok", "srok_unit"))
-    + add([*Примечания:*], val("notes"))
+    + add([*Сумма по договору:*], sum_line)
+    + add([*Порядок оплат, аванс:*], avans_line)
+    + add([*Срок/предмет работ:*], val("work_due"))
+    + add([*Примечания:*], val("special_conditions"))
   ).flatten().chunks(2).map(p => (p.at(0), [#p.at(1)])).flatten()
 )
 
