@@ -1,7 +1,7 @@
 """Выдача файлов по непере­бираемым токенам с TTL.
 
-Файл лежит в var/files/<token><suffix>; человекочитаемое имя (то, под
-которым файл скачает Doc-V) — в таблице files той же базы шлюза.
+Файл лежит в var/files/<token><suffix>; человекочитаемое имя в таблице files той же базе шлюза.
+Доступно по адресу address/ui/files (Файлы)
 """
 import logging
 import re
@@ -17,22 +17,34 @@ log = logging.getLogger(__name__)
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{20,50}$")
 _SUFFIX_RE = re.compile(r"^\.[A-Za-z0-9.]{1,10}$")
 
-
+# returns the current time with timezone awareness
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 class FileStore:
+    """
+    Initialized with settings (defined in config)
+    gateway/config.py
+
+    Creates a file directory if not present.
+    """
     def __init__(self, settings: Settings):
         self.settings = settings
         self.files_dir = settings.files_dir
         self.files_dir.mkdir(parents=True, exist_ok=True)
 
     def save_bytes(self, data: bytes, suffix: str, orig_name: str) -> str:
+        """
+        Generates a token which acts together with suffix as a file name. Saves the file and returns
+        the token. 
+
+        Called in save_file method of FileStore class.
+        """
         if not _SUFFIX_RE.fullmatch(suffix):
-            raise ValueError(f"bad suffix: {suffix!r}")
-        token = secrets.token_urlsafe(24)
-        (self.files_dir / f"{token}{suffix}").write_bytes(data)
+            raise ValueError(f"bad suffix: {suffix!r}") # what-s bad suffix?
+        token = secrets.token_urlsafe(24) # I feel like this is useless kinda, simple cipher.
+        (self.files_dir / f"{token}{suffix}").write_bytes(data) # write file to the given directory
         with connect(self.settings.db_path) as conn:
             conn.execute(
                 "INSERT INTO files (token, orig_name, suffix, created_at) VALUES (?,?,?,?)",
@@ -44,7 +56,7 @@ class FileStore:
         return self.save_bytes(path.read_bytes(), path.suffix, orig_name or path.name)
 
     def resolve(self, token: str) -> tuple[Path, str] | None:
-        """token -> (путь на диске, имя для скачивания) либо None."""
+        """token -> (file path on a disk, имя для скачивания) or None."""
         if not TOKEN_RE.fullmatch(token):
             return None
         with connect(self.settings.db_path) as conn:

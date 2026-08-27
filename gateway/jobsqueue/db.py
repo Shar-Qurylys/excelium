@@ -1,4 +1,8 @@
-"""Одна sqlite-база шлюза: очередь заданий + реестр выданных файлов."""
+"""SQLite база шлюза: 
+Функции: 
+  1. Ведение очереди заданий.
+  2. Ведение реестра выданных файлов.
+"""
 import sqlite3
 from pathlib import Path
 
@@ -54,7 +58,10 @@ CREATE TABLE IF NOT EXISTS heartbeat (
 );
 """
 
-
+# default: PRAGMA journal_mode=WAL
+# - 
+# default: PRAGMA foreign_keys=ON
+#
 def connect(path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(path, timeout=5)
     conn.row_factory = sqlite3.Row
@@ -62,9 +69,8 @@ def connect(path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
-
 def init_db(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with connect(path) as conn:
         conn.executescript(_SCHEMA)
-    path.chmod(0o600)  # в базе персональные данные и файлы реестров
+    path.chmod(0o600)

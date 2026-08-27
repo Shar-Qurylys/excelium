@@ -428,7 +428,7 @@ def typst_edit(request: Request, name: str, link: str = ""):
 
 @router.post("/ui/typst/{name}/save")
 def typst_save(request: Request, name: str, source: str = Form(...)):
-    store = request.app.state.typst_store
+    store = request.app.state.typst_store # from renderers/typst_store.py;
     try:
         store.save(name, source)
     except ValueError as exc:
