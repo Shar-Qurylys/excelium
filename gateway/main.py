@@ -13,6 +13,7 @@ from .jobsqueue.db import init_db
 from .logging_setup import setup_logging
 from .config import APP_DIR, Settings
 from .renderers.approvers import ApproverMatrix
+from .directory import DirectoryStore
 from .heartbeat import Heartbeat
 from .renderers.registry_outer import load_banks
 from .renderers.typst_store import TypstStore
@@ -20,7 +21,7 @@ from .renderers.typst_renderer import configure as configure_typst
 from .renderers.typst_renderer import typst_available, typst_binary
 from .opsrunner.registry import load_registry
 from .jobsqueue.service import JobQueue
-from .routers import debug, files, jobs, ops, render, ui
+from .routers import debug, directory, files, jobs, ops, render, ui
 from .security import SecurityMiddleware
 
 log = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.jobs = JobQueue(settings.db_path, lease_seconds=settings.lease_seconds,
                                   keep_days=settings.jobs_keep_days)
         app.state.heartbeat = Heartbeat(settings.db_path)
+        app.state.directory = DirectoryStore(settings.db_path)
         app.state.typst_store = TypstStore(settings.db_path)
         seeded = app.state.typst_store.seed_from_dir(APP_DIR / "templates" / "typst")
         if seeded:
@@ -75,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(jobs.router)
     app.include_router(ui.router)
     app.include_router(debug.router)
+    app.include_router(directory.router)
 
     @app.get("/health")
     def health():

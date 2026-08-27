@@ -89,7 +89,8 @@ def render_typst_endpoint(name: str, request: Request, data: dict = Body(...)):
     request.app.state.heartbeat.touch("render")
     try:
         pdf = render_typst(name, source, data, store.assets_bytes(),
-                           verify_secret=request.app.state.settings.verify_secret)
+                           verify_secret=request.app.state.settings.verify_secret,
+                           directory=request.app.state.directory.all())
     except TypstError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     token = request.app.state.filestore.save_bytes(pdf, ".pdf", f"{name}_{date.today()}.pdf")

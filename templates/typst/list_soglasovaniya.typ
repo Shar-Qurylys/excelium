@@ -19,6 +19,10 @@
 //   "lawyer": "",
 //   "rows": [{"fio": "...", "position": "...", "decision": "Согласен",
 //             "date": "...", "comment": "..."}],
+//   // ЛИБО сырая сериализация «Таблицы решения» (UID расшифровываются
+//   // справочниками шлюза /directory/structura и /directory/dolzhnosti):
+//   "approved_by": [[["этап","код визы","uid сотрудника","uid должности",
+//                     "2026-08-20T14:48:47+05:00","комментарий","версия"], ...]],
 //   "org": {"name": "...", "bin": "...", "logo": "...",   // шапка бланка,
 //           "blank": "blank_shar.png", "top_margin": 4.2}, // можно опустить
 //   "qr": "адрес карточки"                       // можно опустить
@@ -28,6 +32,7 @@
 // Оба входа опциональны: шаблон компилируется и вручную, без --input
 #let data = if "data" in sys.inputs { json(sys.inputs.data) } else { (:) }
 #let meta = if "meta" in sys.inputs { json(sys.inputs.meta) } else { (:) }
+#let dir = if "dir" in sys.inputs { json(sys.inputs.dir) } else { (:) }
 #let org = data.at("org", default: (:))
 #let blank = org.at("blank", default: "")
 
@@ -137,6 +142,59 @@
 #v(1.2em)
 
 // ---- решения --------------------------------------------------------------
+// Строки: либо готовые объекты rows, либо сырая «Таблица решения»
+// (approved_by) — UID сотрудников/должностей расшифровываются
+// справочниками шлюза; неизвестный UID печатается как есть.
+#let visa(code) = ("1": "Согласен", "-1": "Не согласен",
+                   "2": "Подписан", "-2": "Не подписан").at(str(code), default: str(code))
+#let fmtdate(v) = {
+  let s = str(v)
+  if s.len() >= 16 and s.slice(4, 5) == "-" {
+    s.slice(8, 10) + "." + s.slice(5, 7) + "." + s.slice(0, 4) + " " + s.slice(11, 16)
+  } else { s }
+}
+#let people = dir.at("structura", default: (:))
+#let positions = dir.at("dolzhnosti", default: (:))
+#let short_uid(uid) = {  // неизвестный uid не должен распирать таблицу
+  let s = str(uid)
+  if s.len() > 12 { s.slice(0, 8) + "…?" } else { s }
+}
+#let person_name(uid) = people.at(str(uid), default: (:)).at("name", default: short_uid(uid))
+#let person_pos(uid_pos, uid_person) = {
+  let p = positions.at(str(uid_pos), default: (:)).at("name", default: "")
+  if p == "" { people.at(str(uid_person), default: (:)).at("position", default: short_uid(uid_pos)) }
+  else { p }
+}
+#let all_rows = {
+  let out = ()
+  let ab = data.at("approved_by", default: ())
+  // сериализация приходит с лишним уровнем вложенности: [[[...], [...]]]
+  let flat = if ab.len() > 0 and type(ab.at(0)) == array and ab.at(0).len() > 0 and type(ab.at(0).at(0)) == array { ab.at(0) } else { ab }
+  for r in flat {
+    if type(r) == array and r.len() >= 5 {
+      out.push((
+        position: person_pos(r.at(3), r.at(2)),
+        company: "",
+        fio: person_name(r.at(2)),
+        decision: visa(r.at(1)),
+        date: fmtdate(r.at(4)),
+        comment: if r.len() > 5 { str(r.at(5)) } else { "" },
+      ))
+    }
+  }
+  for r in data.at("rows", default: ()) {
+    out.push((
+      position: str(r.at("position", default: "")),
+      company: str(r.at("company", default: "")),
+      fio: str(r.at("fio", default: "")),
+      decision: str(r.at("decision", default: "")),
+      date: str(r.at("date", default: "")),
+      comment: str(r.at("comment", default: "")),
+    ))
+  }
+  out
+}
+
 #align(center)[
   #text(size: 12pt, weight: "bold")[Список согласований и исполнений по документу]
 ]
@@ -151,15 +209,15 @@
   table.header(
     [*№*], [*Должность*], [*Ф.И.О.*], [*Решение*], [*Дата*], [*Комментарий*],
   ),
-  ..for (i, r) in data.at("rows", default: ()).enumerate() {
+  ..for (i, r) in all_rows.enumerate() {
     (
       [#(i + 1)],
-      [#r.at("position", default: "")
-       #if r.at("company", default: "") != "" [ \ #text(size: 8pt, fill: gray)[#r.at("company")] ]],
-      [#r.at("fio", default: "")],
-      [#r.at("decision", default: "")],
-      [#r.at("date", default: "")],
-      [#r.at("comment", default: "")],
+      [#r.position
+       #if r.company != "" [ \ #text(size: 8pt, fill: gray)[#r.company] ]],
+      [#r.fio],
+      [#r.decision],
+      [#r.date],
+      [#r.comment],
     )
   }
 )

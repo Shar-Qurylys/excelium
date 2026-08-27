@@ -41,6 +41,13 @@ CREATE TABLE IF NOT EXISTS typst_assets (
   data BLOB NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS directories (
+  name TEXT NOT NULL,
+  uid TEXT NOT NULL,
+  data TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (name, uid)
+);
 CREATE TABLE IF NOT EXISTS heartbeat (
   kind TEXT PRIMARY KEY,
   seen_at TEXT NOT NULL

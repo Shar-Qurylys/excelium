@@ -107,3 +107,32 @@ def test_list_soglasovaniya_on_blank(client):
         "document_number": "1", "rows": [],
     }, headers=docv_headers())
     assert r.status_code == 200, r.text
+
+
+def test_directory_upload_and_stats(client):
+    r = client.post("/directory/structura", headers=docv_headers(), json={"items": [
+        {"uid": "aaa-1", "name": "Абдрахманова Х.М.", "position": "Главный бухгалтер"},
+        {"uid": "bbb-2", "name": "Бекмуратов Е.И."},
+        {"без-uid": True},
+    ]})
+    assert r.status_code == 200 and r.json() == {"directory": "structura", "items": 2}
+    assert client.get("/directory", headers=docv_headers()).json() == {"structura": 2}
+    # полная замена
+    client.post("/directory/structura", headers=docv_headers(),
+                json=[{"uid": "ccc-3", "name": "Новый"}])
+    assert client.get("/directory", headers=docv_headers()).json() == {"structura": 1}
+    assert client.post("/directory/КИРИЛЛИЦА", headers=docv_headers(),
+                       json=[]).status_code == 422
+
+
+@pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
+def test_approved_by_resolved_via_directory(client):
+    client.post("/directory/structura", headers=docv_headers(),
+                json=[{"uid": "p-1", "name": "Абдрахманова Х.М."}])
+    client.post("/directory/dolzhnosti", headers=docv_headers(),
+                json=[{"uid": "d-1", "name": "Главный бухгалтер"}])
+    r = client.post("/render/typst/list_soglasovaniya", json={
+        "document_number": "1",
+        "approved_by": [[["1", "1", "p-1", "d-1", "2026-08-20T14:48:47+05:00", "", "1"]]],
+    }, headers=docv_headers())
+    assert r.status_code == 200, r.text

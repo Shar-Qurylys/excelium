@@ -330,7 +330,8 @@ def render_typst_ui(request: Request, template: str = Form(...), data: str = For
                      flash="Нет такого шаблона", flash_err=True, **ctx)
     try:
         pdf = render_typst(template, source, parsed, store.assets_bytes(),
-                           verify_secret=request.app.state.settings.verify_secret)
+                           verify_secret=request.app.state.settings.verify_secret,
+                           directory=request.app.state.directory.all())
     except TypstError as exc:
         return _page(request, "render.html", "render",
                      flash=f"Ошибка компиляции: {exc}", flash_err=True, **ctx)
@@ -451,7 +452,8 @@ def typst_test(request: Request, name: str, data: str = Form(...)):
                      flash="Данные — не JSON", flash_err=True)
     try:
         pdf = render_typst(name, source, parsed, store.assets_bytes(),
-                           verify_secret=request.app.state.settings.verify_secret)
+                           verify_secret=request.app.state.settings.verify_secret,
+                           directory=request.app.state.directory.all())
     except TypstError as exc:
         return _page(request, "typst_edit.html", "typst",
                      **_typst_edit_ctx(request, name, test_data=data, error=str(exc)))

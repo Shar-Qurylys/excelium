@@ -93,7 +93,8 @@ def verify_code(data: dict, secret: str) -> str:
 
 def render_typst(name: str, source: str, data: dict,
                  assets: dict[str, bytes] | None = None,
-                 *, verify_secret: str = "") -> bytes:
+                 *, verify_secret: str = "",
+                 directory: dict | None = None) -> bytes:
     """Компилирует шаблон source (имя нужно для сообщений об ошибках).
 
     Картинки assets кладутся в подпапку assets/ рабочей директории —
@@ -114,6 +115,8 @@ def render_typst(name: str, source: str, data: dict,
         }
         (work / "meta.json").write_text(json.dumps(meta, ensure_ascii=False),
                                         encoding="utf-8")
+        (work / "dir.json").write_text(
+            json.dumps(directory or {}, ensure_ascii=False), encoding="utf-8")
         qr_text = str(data.get("qr") or "")[:QR_LIMIT] if isinstance(data, dict) else ""
         if qr_text:
             import qrcode
@@ -130,7 +133,7 @@ def render_typst(name: str, source: str, data: dict,
             proc = subprocess.run(
                 [binary, "compile", "--root", str(work),
                  "--input", "data=data.json", "--input", "meta=meta.json",
-                 f"{name}.typ", out.name],
+                 "--input", "dir=dir.json", f"{name}.typ", out.name],
                 cwd=work, capture_output=True, text=True, timeout=TIMEOUT_SEC,
             )
         except subprocess.TimeoutExpired:
