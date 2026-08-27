@@ -3,7 +3,7 @@
 // Данные приходят из тела POST /render/typst/primer и доступны как
 // обычный JSON-объект. Скопируйте файл под новым именем — новое имя
 // сразу станет адресом /render/typst/<имя>.
-#let data = json(sys.inputs.data)
+#let data = if "data" in sys.inputs { json(sys.inputs.data) } else { (:) }
 
 #set page(paper: "a4", margin: 2cm)
 #set text(font: ("Liberation Sans", "Arial", "DejaVu Sans"), size: 11pt, lang: "ru")

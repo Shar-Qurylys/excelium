@@ -23,12 +23,13 @@
 //             "fio": "Абдрахманова Х.М.", "decision": "Согласовано",
 //             "date": "25.08.2026 14:02", "comment": ""}],
 //   "lawyer": "Бекмуратов Е.И.",
-//   "qr": "{{ГИПЕРССЫЛКА НА ТЕКУЩИЙ ДОКУМЕНТ}}"      // шлюз сам построит qr.png
+//   "qr": "адрес карточки документа"                  // шлюз сам построит qr.png; можно опустить
 // }
 // Пустые поля не печатаются. Блок подлинности (QR + код проверки +
 // время формирования) шлюз добавляет сам через sys.inputs.meta.
-#let data = json(sys.inputs.data)
-#let meta = json(sys.inputs.meta)
+// Оба входа опциональны: шаблон компилируется и вручную, без --input
+#let data = if "data" in sys.inputs { json(sys.inputs.data) } else { (:) }
+#let meta = if "meta" in sys.inputs { json(sys.inputs.meta) } else { (:) }
 #let org = data.at("org", default: (:))
 #let blank = org.at("blank", default: "")
 

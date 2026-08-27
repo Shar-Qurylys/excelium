@@ -347,7 +347,8 @@ def _typst_templates(request: Request) -> list[str]:
 # --- шаблоны Typst --------------------------------------------------------
 
 NEW_TEMPLATE = '''// Новый шаблон. Данные приходят из POST-запроса:
-#let data = json(sys.inputs.data)
+#let data = if "data" in sys.inputs { json(sys.inputs.data) } else { (:) }
+#let meta = if "meta" in sys.inputs { json(sys.inputs.meta) } else { (:) }
 
 #set page(paper: "a4", margin: 2cm)
 #set text(font: ("Liberation Sans", "Arial", "DejaVu Sans"), size: 11pt, lang: "ru")
