@@ -108,3 +108,21 @@ def test_bad_config_fails_fast(tmp_path):
                    '    params:\n      cmd: {pattern: ".*"}\n', encoding="utf-8")
     with pytest.raises(OpsConfigError):
         load_registry(bad)
+
+
+def test_blank_to_png_from_pdf(client):
+    """Реальная операция из ops.yaml: PDF-бланк -> фоновый PNG."""
+    import pymupdf
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)  # A4
+    page.draw_rect(pymupdf.Rect(0, 0, 595, 80), color=None, fill=(0, 0.6, 0.55))
+    pdf_bytes = doc.tobytes()
+    token = client.app.state.filestore.save_bytes(pdf_bytes, ".pdf", "бланк.pdf")
+    r = client.post("/ops/blank_to_png", json={"params": {"file": token}},
+                    headers=ops_headers())
+    body = r.json()
+    assert r.status_code == 200 and body["ok"], body
+    assert body["files"] and body["files"][0]["name"] == "blank.png"
+    png_token = body["files"][0]["download_url"].rsplit("/", 1)[1]
+    png = client.get(f"/files/{png_token}").content
+    assert png.startswith(b"\x89PNG")

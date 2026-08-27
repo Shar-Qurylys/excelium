@@ -23,6 +23,14 @@ operations:
     collect: "*.pdf"
     timeout_sec: 120
 
+  blank_to_png:
+    description: Фирменный бланк (PDF/DOCX) -> фоновый PNG для печатных форм
+    argv: ["{python}", "{app_dir}/scripts/blank_to_png.py", "{file}"]
+    params:
+      file: {type: file}
+    collect: "*.png"
+    timeout_sec: 120
+
   zip_bundle:
     description: Упаковка нескольких файлов из хранилища в один архив
     argv: ["{python}", "{app_dir}/scripts/zip_bundle.py", "{files...}"]

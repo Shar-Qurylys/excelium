@@ -93,3 +93,17 @@ def test_list_soglasovaniya_minimal(client):
     r = client.post("/render/typst/list_soglasovaniya", json={"rows": []},
                     headers=docv_headers())
     assert r.status_code == 200, r.text
+
+
+@pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
+def test_list_soglasovaniya_on_blank(client):
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (827, 1169), "white").save(buf, format="PNG")
+    client.app.state.typst_store.save_asset("blank_test.png", buf.getvalue())
+    r = client.post("/render/typst/list_soglasovaniya", json={
+        "org": {"name": "ТОО «Тест»", "blank": "blank_test.png", "top_margin": 5},
+        "document_number": "1", "rows": [],
+    }, headers=docv_headers())
+    assert r.status_code == 200, r.text

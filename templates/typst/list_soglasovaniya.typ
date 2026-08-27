@@ -4,7 +4,11 @@
 // POST /render/typst/list_soglasovaniya. Пример данных:
 // {
 //   "org": {"name": "ТОО «Шар-Кұрылыс»", "bin": "000940001102",
-//           "logo": "org_shar.png"},                  // логотип — из «Картинок», можно опустить
+//           "logo": "org_shar.png",                   // логотип — из «Картинок», можно опустить
+//           "blank": "blank_shar.png",                // фирменный бланк подложкой всей страницы
+//           "top_margin": 4.2},                       // отступ (см) под шапку бланка; низ 2.4 см
+//   С "blank" текстовая шапка (название/БИН/логотип) не печатается —
+//   бланк уже несёт её. PNG бланка делает операция blank_to_png.
 //   "document_number": "12-СМР", "document_date": "01.08.2026",
 //   "subject": "Строительно-монтажные работы ...",
 //   "initiator": "Иванов И.И., инженер ПТО",
@@ -26,12 +30,21 @@
 #let data = json(sys.inputs.data)
 #let meta = json(sys.inputs.meta)
 #let org = data.at("org", default: (:))
+#let blank = org.at("blank", default: "")
 
-#set page(paper: "a4", margin: (x: 1.6cm, top: 1.4cm, bottom: 1.6cm))
+#set page(
+  paper: "a4",
+  margin: if blank != "" {
+    (x: 1.7cm, top: org.at("top_margin", default: 4.2) * 1cm, bottom: 2.4cm)
+  } else {
+    (x: 1.6cm, top: 1.4cm, bottom: 1.6cm)
+  },
+  background: if blank != "" { image("assets/" + blank, width: 100%, height: 100%) },
+)
 #set text(font: ("Liberation Sans", "Arial", "DejaVu Sans"), size: 10pt, lang: "ru")
 
-// ---- шапка организации ----------------------------------------------------
-#{
+// ---- шапка организации (не печатается поверх бланка) ----------------------
+#if blank == "" {
   let logo = org.at("logo", default: "")
   let name = org.at("name", default: "")
   let bin = org.at("bin", default: "")

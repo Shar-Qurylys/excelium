@@ -44,7 +44,9 @@ sudo systemctl restart docv-gateway
   абсолютным путём в .env, либо PATH в юните (там он уже прописан).
   Найденный путь виден на «Обзоре» интерфейса; без бинаря endpoint
   отвечает 503.
-- /ops xlsx_to_pdf — libreoffice (`apt install libreoffice-calc --no-install-recommends`).
+- /ops xlsx_to_pdf и blank_to_png (DOCX-бланки) — libreoffice
+  (`apt install libreoffice --no-install-recommends`); PDF-бланки
+  конвертируются без него (pymupdf в venv).
 - /ops restart_unit — строка в sudoers (через `visudo`):
   `radmin ALL=(root) NOPASSWD: /usr/bin/systemctl restart docv-server.service`
 
