@@ -1,252 +1,300 @@
-// ЛИСТ СОГЛАСОВАНИЯ ДОКУМЕНТА — печатная форма по образцу карточки
-// договора Doc-V.
-//
-// POST /render/typst/list_soglasovaniya. Контракт (собирается в Doc-V
-// методом add_key, лишние ключи игнорируются, пустые не печатаются):
-// {
-//   "organization": "ТОО «Шар-Кұрылыс»",        // сторона ГК
-//   "document_number": "0099/test/adm",
-//   "document_date": "25.08.2026",              // строкой, как на карточке
-//   "subject": "Обучение БИОТ",
-//   "initiator": "Фамилия Имя (должность)",
-//   "department": "Отдел по управлению персоналом",
-//   "counteragent": "ТОО «Test»",
-//   "object": "Администрация",
-//   "sum": [{"sum": 144000, "currency": "KZT", "vat": "с НДС"}],
-//   "pre_payment": 0,                            // 0 = строка не печатается
-//   "work_due": "Обучение БИОТ",
-//   "special_conditions": "",
-//   "lawyer": "",
-//   "rows": [{"fio": "...", "position": "...", "decision": "Согласен",
-//             "date": "...", "comment": "..."}],
-//   // ЛИБО сырая сериализация «Таблицы решения» (UID расшифровываются
-//   // справочниками шлюза /directory/structura и /directory/dolzhnosti):
-//   "approved_by": [[["этап","код визы","uid сотрудника","uid должности",
-//                     "2026-08-20T14:48:47+05:00","комментарий","версия"], ...]],
-//   "org": {"name": "...", "bin": "...", "logo": "...",   // шапка бланка,
-//           "blank": "blank_shar.png", "top_margin": 4.2}, // можно опустить
-//   "qr": "адрес карточки"                       // можно опустить
-// }
-// Пустые поля не печатаются. Блок подлинности (QR + код проверки +
-// время формирования) шлюз добавляет сам через sys.inputs.meta.
-// Оба входа опциональны: шаблон компилируется и вручную, без --input
-#let data = if "data" in sys.inputs { json(sys.inputs.data) } else { (:) }
-#let meta = if "meta" in sys.inputs { json(sys.inputs.meta) } else { (:) }
-#let dir = if "dir" in sys.inputs { json(sys.inputs.dir) } else { (:) }
-#let org = data.at("org", default: (:))
-#let blank = org.at("blank", default: "")
+// Печатная форма карточки договора
 
+#let data = json(sys.inputs.data)
+
+// --- Вспомогательные функции обработки данных ---
+#let get-field(dict, key, default: "") = {
+  if dict != none and type(dict) == dictionary and key in dict {
+    dict.at(key)
+  } else {
+    default
+  }
+}
+
+#let format-number(val) = {
+  if type(val) == int or type(val) == float {
+    let s = str(val)
+    let out = ""
+    let count = 0
+    for i in range(s.len() - 1, -1, step: -1) {
+      if count > 0 and calc.rem(count, 3) == 0 {
+        out = " " + out
+      }
+      out = s.at(i) + out
+      count += 1
+    }
+    out
+  } else {
+    str(val)
+  }
+}
+
+#let parse-date(d-str) = {
+  if d-str == none or d-str == "" { return "" }
+  if d-str.contains("T") {
+    let parts = d-str.split("T")
+    let d = parts.at(0)
+    let t = parts.at(1).slice(0, 5)
+    d + " " + t
+  } else {
+    d-str
+  }
+}
+
+// --- Извлечение ключевых значений ---
+#let org-name = {
+  let org = data.at("organization", default: none)
+  if org != none and type(org) == dictionary {
+    org.at("name", default: "")
+  } else {
+    data.at("org", default: (:)).at("name", default: data.at("storona_gk", default: ""))
+  }
+}
+
+#let org-bin = {
+  let org = data.at("organization", default: none)
+  if org != none and type(org) == dictionary {
+    org.at("bin", default: "")
+  } else {
+    data.at("org", default: (:)).at("bin", default: "")
+  }
+}
+
+#let sum-text = {
+  let s = data.at("sum", default: none)
+  if type(s) == dictionary {
+    let amt = format-number(s.at("sum", default: 0))
+    let curr = s.at("currency", default: "KZT")
+    let vat = s.at("vat", default: "")
+    (amt, curr, vat).filter(x => str(x) != "").join(" ")
+  } else if s != none {
+    let curr = data.at("currency", default: "")
+    let vat = data.at("vat", default: "")
+    (str(s), curr, vat).filter(x => str(x) != "").join(" ")
+  } else {
+    ""
+  }
+}
+
+#let avans-text = {
+  let p = data.at("pre_payment", default: none)
+  if p != none {
+    let curr = if type(data.at("sum", default: none)) == dictionary {
+      data.sum.at("currency", default: "KZT")
+    } else {
+      data.at("currency", default: "KZT")
+    }
+    format-number(p) + " " + curr
+  } else {
+    let a = data.at("avans", default: "")
+    if a != "" { a + " " + data.at("currency", default: "") } else { "" }
+  }
+}
+
+#let srok-text = {
+  let w = data.at("work_due", default: "")
+  if w != "" {
+    w
+  } else {
+    let s = data.at("srok", default: "")
+    let u = data.at("srok_unit", default: "")
+    (s, u).filter(x => x != "").join(" ")
+  }
+}
+
+#let notes-text = {
+  let n = data.at("special_conditions", default: "")
+  if n != "" { n } else { data.at("notes", default: "") }
+}
+
+// --- Настройки страницы и стилей ---
 #set page(
   paper: "a4",
-  margin: if blank != "" {
-    (x: 1.7cm, top: org.at("top_margin", default: 4.2) * 1cm, bottom: 2.4cm)
-  } else {
-    (x: 1.6cm, top: 1.4cm, bottom: 1.6cm)
-  },
-  background: if blank != "" { image("assets/" + blank, width: 100%, height: 100%) },
+  margin: (x: 1.5cm, top: 1.5cm, bottom: 1.8cm),
+  footer: [
+    #align(right)[
+      #text(size: 8pt, fill: rgb("#64748B"))[Стр. #counter(page).display()]
+    ]
+  ]
 )
-#set text(font: ("Liberation Sans", "Arial", "DejaVu Sans"), size: 10pt, lang: "ru")
+#set text(font: ("Liberation Sans", "DejaVu Sans", "Arial"), size: 9.5pt, fill: rgb("#1E293B"), lang: "ru")
 
-// ---- шапка организации (не печатается поверх бланка) ----------------------
-#if blank == "" {
-  let logo = org.at("logo", default: "")
-  let name = org.at("name", default: "")
-  let bin = org.at("bin", default: "")
-  if name != "" or logo != "" {
-    grid(
-      columns: if logo != "" { (auto, 1fr) } else { (1fr,) },
-      column-gutter: 1em,
-      align: horizon,
-      ..if logo != "" { (box(height: 1.6cm, image("assets/" + logo)),) },
-      [
-        #text(size: 12pt, weight: "bold")[#name] \
-        #if bin != "" [ #text(size: 9pt, fill: gray)[БИН #bin] ]
-      ],
-    )
-    v(0.4em)
-    line(length: 100%, stroke: 0.8pt)
-    v(0.8em)
-  }
-}
+#let primary-color = rgb("#0F172A")
+#let border-color = rgb("#CBD5E1")
+#let bg-light = rgb("#F8FAFC")
+#let success-color = rgb("#166534")
+#let success-bg = rgb("#DCFCE7")
 
-#align(center)[
-  #text(size: 14pt, weight: "bold")[ЛИСТ СОГЛАСОВАНИЯ ДОКУМЕНТА]
-]
-#v(0.8em)
-
-// ---- реквизиты документа --------------------------------------------------
-#let val(..keys) = {
-  // склейка непустых значений через пробел (join пустого массива даёт none)
-  let joined = keys.pos().map(k => str(data.at(k, default: ""))).filter(x => x != "").join(" ")
-  if joined == none { "" } else { joined }
-}
-#let rows = ()
-#let add(label, value) = { if value != none and value != "" { ((label, value),) } else { () } }
-
-#let doc_line = {
-  let n = val("document_number")
-  let d = val("document_date")
-  if n != "" and d != "" [№ #n от #d] else if n != "" [№ #n] else [#d]
-}
-
-// число -> "144 000" / "144 000,50"
-#let fmtnum(n) = {
-  if type(n) == int or type(n) == float {
-    let s = str(n).replace(".", ",")
-    let parts = s.split(",")
-    let int-part = parts.at(0)
-    let group(x) = if x.len() <= 3 { x } else {
-      group(x.slice(0, x.len() - 3)) + " " + x.slice(x.len() - 3) }
-    group(int-part) + (if parts.len() > 1 { "," + parts.at(1) } else { "" })
-  } else { str(n) }
-}
-
-// [{"sum": 144000, "currency": "KZT", "vat": "с НДС"}] -> "144 000 KZT с НДС"
-#let sum_line = {
-  let raw = data.at("sum", default: ())
-  if type(raw) == array {
-    raw.map(e => (fmtnum(e.at("sum", default: "")), str(e.at("currency", default: "")),
-                  str(e.at("vat", default: ""))).filter(x => x != "").join(" "))
-       .join("; ")
-  } else { str(raw) }
-}
-
-#let avans_line = {
-  let a = data.at("pre_payment", default: "")
-  if a == "" or a == 0 or a == "0" { "" } else {
-    let cur = if type(data.at("sum", default: ())) == array and data.sum.len() > 0 {
-      str(data.sum.at(0).at("currency", default: "")) } else { "" }
-    (fmtnum(a) + " " + cur).trim()
-  }
-}
-
-#grid(
-  columns: (4.6cm, 1fr),
-  column-gutter: 1em,
-  row-gutter: 0.6em,
-  ..(
-    add([*Основной договор:*], doc_line)
-    + add([*Предмет договора:*], val("subject"))
-    + add([*Инициатор:*], val("initiator"))
-    + add([*Отдел:*], val("department"))
-    + add([*Контрагент:*], val("counteragent"))
-    + add([*Сторона ГК:*], val("organization"))
-    + add([*Наименование объекта:*], val("object"))
-    + add([*Сумма по договору:*], sum_line)
-    + add([*Порядок оплат, аванс:*], avans_line)
-    + add([*Срок/предмет работ:*], val("work_due"))
-    + add([*Примечания:*], val("special_conditions"))
-  ).flatten().chunks(2).map(p => (p.at(0), [#p.at(1)])).flatten()
-)
-
-#v(1.2em)
-
-// ---- решения --------------------------------------------------------------
-// Строки: либо готовые объекты rows, либо сырая «Таблица решения»
-// (approved_by) — UID сотрудников/должностей расшифровываются
-// справочниками шлюза; неизвестный UID печатается как есть.
-#let visa(code) = ("1": "Согласен", "-1": "Не согласен",
-                   "2": "Подписан", "-2": "Не подписан").at(str(code), default: str(code))
-#let fmtdate(v) = {
-  let s = str(v)
-  if s.len() >= 16 and s.slice(4, 5) == "-" {
-    s.slice(8, 10) + "." + s.slice(5, 7) + "." + s.slice(0, 4) + " " + s.slice(11, 16)
-  } else { s }
-}
-#let people = dir.at("structura", default: (:))
-#let positions = dir.at("dolzhnosti", default: (:))
-#let short_uid(uid) = {  // неизвестный uid не должен распирать таблицу
-  let s = str(uid)
-  if s.len() > 12 { s.slice(0, 8) + "…?" } else { s }
-}
-#let person_name(uid) = people.at(str(uid), default: (:)).at("name", default: short_uid(uid))
-#let person_pos(uid_pos, uid_person) = {
-  let p = positions.at(str(uid_pos), default: (:)).at("name", default: "")
-  if p == "" { people.at(str(uid_person), default: (:)).at("position", default: short_uid(uid_pos)) }
-  else { p }
-}
-#let all_rows = {
-  let out = ()
-  let ab = data.at("approved_by", default: ())
-  // сериализация приходит с лишним уровнем вложенности: [[[...], [...]]]
-  let flat = if ab.len() > 0 and type(ab.at(0)) == array and ab.at(0).len() > 0 and type(ab.at(0).at(0)) == array { ab.at(0) } else { ab }
-  for r in flat {
-    if type(r) == array and r.len() >= 5 {
-      out.push((
-        position: person_pos(r.at(3), r.at(2)),
-        company: "",
-        fio: person_name(r.at(2)),
-        decision: visa(r.at(1)),
-        date: fmtdate(r.at(4)),
-        comment: if r.len() > 5 { str(r.at(5)) } else { "" },
-      ))
-    }
-  }
-  for r in data.at("rows", default: ()) {
-    out.push((
-      position: str(r.at("position", default: "")),
-      company: str(r.at("company", default: "")),
-      fio: str(r.at("fio", default: "")),
-      decision: str(r.at("decision", default: "")),
-      date: str(r.at("date", default: "")),
-      comment: str(r.at("comment", default: "")),
-    ))
-  }
-  out
-}
-
-#align(center)[
-  #text(size: 12pt, weight: "bold")[Список согласований и исполнений по документу]
-]
-#v(0.5em)
-
-#table(
-  columns: (auto, 1.15fr, 0.95fr, 0.75fr, 2.1cm, 1.1fr),
-  stroke: 0.5pt,
-  inset: 6.5pt,
-  align: (center + horizon, left + horizon, left + horizon,
-          center + horizon, center + horizon, left + horizon),
-  table.header(
-    [*№*], [*Должность*], [*Ф.И.О.*], [*Решение*], [*Дата*], [*Комментарий*],
-  ),
-  ..for (i, r) in all_rows.enumerate() {
-    (
-      [#(i + 1)],
-      [#r.position
-       #if r.company != "" [ \ #text(size: 8pt, fill: gray)[#r.company] ]],
-      [#r.fio],
-      [#r.decision],
-      [#r.date],
-      [#r.comment],
-    )
-  }
-)
-
-#if val("lawyer") != "" {
-  v(0.8em)
-  [*Ответственный юрист:* #val("lawyer")]
-}
-
-// ---- блок подлинности -----------------------------------------------------
-#v(1fr)
-#line(length: 100%, stroke: (paint: gray, thickness: 0.5pt, dash: "dashed"))
-#v(0.5em)
-#grid(
-  columns: if data.at("qr", default: "") != "" { (2.4cm, 1fr) } else { (1fr,) },
-  column-gutter: 1em,
-  align: horizon,
-  ..if data.at("qr", default: "") != "" { (image("qr.png", width: 2.2cm),) },
+// ---- ШАПКА ДОКУМЕНТА ----
+#block(
+  width: 100%,
+  stroke: (bottom: 1.5pt + primary-color),
+  inset: (bottom: 8pt),
   [
-    #set text(size: 8.5pt, fill: gray)
-    Документ сформирован из системы Doc-V #meta.at("generated_at", default: "")
-    (время астанинское).
-    #if data.at("qr", default: "") != "" [
-      QR-код открывает документ в системе — сверьте состав согласований с карточкой. \
-    ]
-    #if meta.at("verify_code", default: "") != "" [
-      Код подлинности: #text(font: ("SF Mono", "Consolas", "Liberation Mono"), weight: "bold")[#meta.verify_code] —
-      при повторном формировании того же документа код совпадает;
-      расхождение означает, что лист изменён вне системы.
-    ]
-  ],
+    #grid(
+      columns: (1fr, auto),
+      align: (left + horizon, right + horizon),
+      [
+        #if org-name != "" [
+          #text(size: 11pt, weight: "bold", fill: primary-color)[#org-name] \
+        ]
+        #if org-bin != "" [
+          #text(size: 8.5pt, fill: rgb("#64748B"))[БИН #org-bin]
+        ]
+      ],
+      [
+        #text(size: 8pt, fill: rgb("#64748B"))[Система электронного документооборота]
+      ]
+    )
+  ]
+)
+
+#v(10pt)
+
+#align(center)[
+  #text(size: 13pt, weight: "bold", fill: primary-color)[ЛИСТ СОГЛАСОВАНИЯ ДОКУМЕНТА]
+]
+
+#v(10pt)
+
+// ---- РЕКВИЗИТЫ ДОКУМЕНТА ----
+#let doc-number = data.at("document_number", default: "")
+#let doc-date = data.at("document_date", default: "")
+#let doc-title = {
+  if doc-number != "" and doc-date != "" [№ #doc-number (#doc-date)]
+  else if doc-number != "" [№ #doc-number]
+  else [#doc-date]
+}
+
+#let attr-row(label, value) = {
+  if value != none and str(value).trim() != "" {
+    (
+      table.cell(fill: bg-light, align: left + horizon)[#text(weight: "bold")[#label]],
+      table.cell(align: left + horizon)[#value]
+    )
+  } else {
+    ()
+  }
+}
+
+#let attr-cells = (
+  attr-row("Документ:", doc-title) +
+  attr-row("Предмет договора:", data.at("subject", default: "")) +
+  attr-row("Инициатор:", data.at("initiator", default: "")) +
+  attr-row("Подразделение:", data.at("department", default: "")) +
+  attr-row("Контрагент:", data.at("counteragent", default: "")) +
+  attr-row("Наименование объекта:", data.at("object", default: "")) +
+  attr-row("Сумма договора:", sum-text) +
+  attr-row("Предоплата / Аванс:", avans-text) +
+  attr-row("Срок выполнения:", srok-text) +
+  attr-row("Ответственный юрист:", data.at("lawyer", default: "")) +
+  attr-row("Особые условия:", notes-text)
+)
+
+#if attr-cells.len() > 0 {
+  table(
+    columns: (3.8cm, 1fr),
+    stroke: 0.5pt + border-color,
+    inset: 6pt,
+    ..attr-cells.flatten()
+  )
+}
+
+#v(12pt)
+
+// ---- ХОД СОГЛАСОВАНИЯ ----
+#text(size: 11pt, weight: "bold", fill: primary-color)[Ход согласования и решения]
+#v(6pt)
+
+#let raw-rows = if "approved_by" in data { data.approved_by } else { data.at("rows", default: ()) }
+
+#if raw-rows.len() > 0 {
+  table(
+    columns: (0.8cm, 1.2fr, 1.5fr, 1fr, 1.2fr, 1.5fr),
+    stroke: 0.5pt + border-color,
+    inset: 5.5pt,
+    fill: (col, row) => if row == 0 { bg-light } else { none },
+    align: (col, row) => {
+      if row == 0 { center + horizon }
+      else if col == 0 or col == 3 { center + horizon }
+      else { left + horizon }
+    },
+    table.header(
+      [*№*], [*Этап / Идентификатор*], [*Исполнитель*], [*Решение*], [*Дата и время*], [*Комментарий*]
+    ),
+    ..for (idx, item) in raw-rows.enumerate() {
+      let is-tuple = type(item) == array
+      
+      let step = if is-tuple { item.at(0, default: str(idx + 1)) } else { str(idx + 1) }
+      let user-info = if is-tuple { item.at(3, default: "") } else { item.at("fio", default: "") }
+      let pos-info = if is-tuple { "" } else { item.at("position", default: "") }
+      let is-approved = if is-tuple { item.at(1, default: "1") == "1" } else { item.at("decision", default: "") == "Согласовано" }
+      let decision-text = if is-approved { "Согласовано" } else if is-tuple { "Отклонено" } else { item.at("decision", default: "-") }
+      let dt = if is-tuple { parse-date(item.at(4, default: "")) } else { item.at("date", default: "") }
+      let comment = if is-tuple { item.at(5, default: "") } else { item.at("comment", default: "") }
+
+      (
+        [#(idx + 1)],
+        [Этап #step],
+        [
+          #if pos-info != "" [#text(size: 8pt, fill: rgb("#64748B"))[#pos-info] \ ]
+          #user-info
+        ],
+        [
+          #if is-approved [
+            #box(
+              fill: success-bg,
+              inset: (x: 5pt, y: 3pt),
+              radius: 3pt,
+              outset: 0pt,
+              text(fill: success-color, weight: "bold", size: 8.5pt)[#decision-text]
+            )
+          ] else [
+            #decision-text
+          ]
+        ],
+        [#dt],
+        [#text(size: 8.5pt)[#comment]]
+      )
+    }.flatten()
+  )
+} else [
+  #text(style: "italic", fill: rgb("#64748B"))[Информация о согласовании отсутствует.]
+]
+
+// ---- БЛОК ПРОВЕРКИ И ПОДЛИННОСТИ (ЭЦП / QR) ----
+#v(1fr)
+
+#block(
+  width: 100%,
+  stroke: 0.8pt + primary-color,
+  inset: 8pt,
+  radius: 2pt,
+  fill: rgb("#FAFAFA"),
+  [
+    #grid(
+      columns: if data.at("qr", default: "") != "" or "approved_by" in data { (2.2cm, 1fr) } else { (1fr,) },
+      column-gutter: 12pt,
+      align: horizon,
+      ..if data.at("qr", default: "") != "" or "approved_by" in data {
+        (
+          box(
+            stroke: 0.5pt + border-color,
+            inset: 2pt,
+            fill: rgb("#FFFFFF"),
+            image("qr.png", width: 2cm)
+          ),
+        )
+      },
+      [
+        #text(size: 9pt, weight: "bold", fill: primary-color)[ДОКУМЕНТ ПОДПИСАН ЭЛЕКТРОННОЙ ЦИФРОВОЙ ПОДПИСЬЮ] \
+        #v(2pt)
+        #text(size: 8pt, fill: rgb("#475569"))[
+          Штамп электронного согласования карточки документа #doc-title \
+          Сформировано в СЭД | Организация: #org-name \
+          Статус: Согласовано всеми участниками маршрута
+        ]
+      ]
+    )
+  ]
 )
