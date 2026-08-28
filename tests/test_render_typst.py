@@ -108,13 +108,16 @@ def test_list_soglasovaniya_actual_contract(client):
     text = doc[0].get_text()
     # UID расшифрованы, коды визы переведены, unix-время стало датой
     assert "Шелевий Ю.В." in text and "Начальник ЮО" in text
-    assert "Согласен" in text and "Не согласен" in text
+    assert "СОГЛАСЕН" in text.upper() and "НЕ СОГЛАСЕН" in text.upper()
     assert "20.08.2026" in text and "1787166000" not in text
+    assert "Снабженец" in text and "Начальник ЮО" in text  # должность отдельной колонкой
     # деньги с разбивкой разрядов, сводка и группировка по этапам
     assert "5 500 000 KZT с НДС" in text
-    assert "ЭТАП 1" in text and "ЭТАП 2" in text
-    assert "Решений: 2" in text
-    assert "СМ" in text  # код организации в шапке
+    # надписи вразрядку извлекаются с пробелами между буквами — сравниваем без них
+    tight = text.replace(" ", "").replace("\n", "")
+    assert "ЭТАП1" in tight and "ЭТАП2" in tight
+    assert "решений:2" in tight
+    assert 'ТОО"СМУАРГОН"·СМ' in tight  # организация и её код в шапке
 
 
 @pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
@@ -215,3 +218,57 @@ def test_approved_by_position_from_structura_entry(client):
         "approved_by": [[["1", "1", "p-9", "d-неизвестен-uid-длинный", "2026-08-20T14:48:47+05:00", "", "1"]]],
     }, headers=docv_headers())
     assert r.status_code == 200, r.text
+
+
+@pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
+def test_all_visa_codes_labelled(client):
+    """Каждый код поля «Виза» получает свою подпись, незнакомый — как есть."""
+    client.post("/directory/structura", headers=docv_headers(),
+                json=[{"uid": "u", "display_name": "Тест Т.Т.", "position": "Директор"}])
+    r = client.post("/render/typst/list_soglasovaniya", json=dict(ACTUAL, approved_by=[
+        ["1", "1", "u", "d", "2026-08-20T10:00:00+05:00", "", ""],
+        ["1", "-1", "u", "d", "2026-08-21T10:00:00+05:00", "", ""],
+        ["2", "2", "u", "d", "2026-08-22T10:00:00+05:00", "", ""],
+        ["2", "-2", "u", "d", "2026-08-23T10:00:00+05:00", "", ""],
+        ["3", "7", "u", "d", "2026-08-24T10:00:00+05:00", "", ""],
+    ]), headers=docv_headers())
+    assert r.status_code == 200, r.text
+    import pymupdf
+    token = r.json()["download_url"].rsplit("/", 1)[1]
+    text = pymupdf.open(stream=client.get(f"/files/{token}").content,
+                        filetype="pdf")[0].get_text().upper()
+    for label in ("СОГЛАСЕН", "НЕ СОГЛАСЕН", "ПОДПИСАН", "НЕ ПОДПИСАН"):
+        assert label in text, label
+    assert "\n7" in text or " 7" in text  # незнакомый код печатается сырым
+
+
+@pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
+def test_blank_selected_by_filepath(client):
+    """Бланк выбирается ключом blank_filepath; путь режется до имени файла."""
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (827, 1169), "white").save(buf, format="PNG")
+    client.app.state.typst_store.save_asset("blank_sm.png", buf.getvalue())
+    r = client.post("/render/typst/list_soglasovaniya", json=dict(
+        ACTUAL, organization={"name": "ТОО «Тест»", "code": "СМ",
+                              "blank_filepath": "/upload/files/2026/blank_sm.png",
+                              "top_margin": 4.5}), headers=docv_headers())
+    assert r.status_code == 200, r.text
+    # несуществующий бланк — честная ошибка компиляции, а не тихий пропуск
+    r = client.post("/render/typst/list_soglasovaniya", json=dict(
+        ACTUAL, organization={"name": "X", "blank_filepath": "нет_такого.png"}),
+        headers=docv_headers())
+    assert r.status_code == 400
+
+
+@pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
+def test_grouping_can_be_switched_off(client):
+    r = client.post("/render/typst/list_soglasovaniya",
+                    json=dict(ACTUAL, stage_label=""), headers=docv_headers())
+    assert r.status_code == 200
+    import pymupdf
+    token = r.json()["download_url"].rsplit("/", 1)[1]
+    text = pymupdf.open(stream=client.get(f"/files/{token}").content,
+                        filetype="pdf")[0].get_text()
+    assert "ЭТАП" not in text.replace(" ", "")
