@@ -1,300 +1,330 @@
-// Печатная форма карточки договора
+// ЛИСТ СОГЛАСОВАНИЯ ДОКУМЕНТА — печатная форма.
+//
+// POST /render/typst/list_soglasovaniya. Контракт (собирается в Doc-V
+// методом add_key; лишние ключи игнорируются, пустые не печатаются):
+// {
+//   "organization": {"name": "ТОО \"СМУ Аргон\"", "code": "СМ",
+//                    "blank_file_name": "blank_sm.png"},  // бланк подложкой, можно ""
+//   "document_number": "28/П/ДТ2",       // номер или unix-время (распознаётся)
+//   "document_date": "20.08.2026",       // дата или название документа
+//   "subject": "Раствор М200",
+//   "counteragent": "ИП «SUNKAR»",
+//   "object": "ЖК \"Dream Town\" 3-очередь",
+//   "initiator": "Шелевий Ю.В. (Снабженец)",
+//   "department": "Отдел материально-технического снабжения",
+//   "lawyer": "Кожабаев Н.Р. (Юрист)",
+//   "sum": {"sum": 5500000, "currency": "KZT", "vat": "с НДС"},
+//   "pre_payment": 5500000,              // 0 = не печатается
+//   "work_due": "50 дней",
+//   "special_conditions": "",
+//   "approved_by": [["этап","код визы","uid сотрудника","uid должности",
+//                    "2026-08-20T14:48:47+05:00","комментарий","версия"], ...],
+//   "rows": [{"fio","position","decision","date","comment"}],  // альтернатива approved_by
+//   "qr": "адрес карточки"               // можно опустить
+// }
+// UID расшифровываются справочником шлюза (/directory/structura);
+// коды визы, ISO-даты и unix-время приводятся к читаемому виду здесь.
+#let data = if "data" in sys.inputs { json(sys.inputs.data) } else { (:) }
+#let meta = if "meta" in sys.inputs { json(sys.inputs.meta) } else { (:) }
+#let dir = if "dir" in sys.inputs { json(sys.inputs.dir) } else { (:) }
 
-#let data = json(sys.inputs.data)
+// ---- палитра и типографика ------------------------------------------------
+#let accent = rgb("#0f766e")
+#let ink = rgb("#1b2430")
+#let muted = rgb("#6b7480")
+#let hairline = rgb("#e2e6ea")
+#let band = rgb("#f4f6f7")
+#let ok-bg = rgb("#e7f3ec")
+#let ok-fg = rgb("#186a3b")
+#let no-bg = rgb("#fbe9e7")
+#let no-fg = rgb("#a4342a")
 
-// --- Вспомогательные функции обработки данных ---
-#let get-field(dict, key, default: "") = {
-  if dict != none and type(dict) == dictionary and key in dict {
-    dict.at(key)
-  } else {
-    default
-  }
-}
+#let org = data.at("organization", default: (:))
+#let org = if type(org) == dictionary { org } else { ("name": str(org)) }
+#let blank = str(org.at("blank_file_name", default: ""))
 
-#let format-number(val) = {
-  if type(val) == int or type(val) == float {
-    let s = str(val)
-    let out = ""
-    let count = 0
-    for i in range(s.len() - 1, -1, step: -1) {
-      if count > 0 and calc.rem(count, 3) == 0 {
-        out = " " + out
-      }
-      out = s.at(i) + out
-      count += 1
-    }
-    out
-  } else {
-    str(val)
-  }
-}
-
-#let parse-date(d-str) = {
-  if d-str == none or d-str == "" { return "" }
-  if d-str.contains("T") {
-    let parts = d-str.split("T")
-    let d = parts.at(0)
-    let t = parts.at(1).slice(0, 5)
-    d + " " + t
-  } else {
-    d-str
-  }
-}
-
-// --- Извлечение ключевых значений ---
-#let org-name = {
-  let org = data.at("organization", default: none)
-  if org != none and type(org) == dictionary {
-    org.at("name", default: "")
-  } else {
-    data.at("org", default: (:)).at("name", default: data.at("storona_gk", default: ""))
-  }
-}
-
-#let org-bin = {
-  let org = data.at("organization", default: none)
-  if org != none and type(org) == dictionary {
-    org.at("bin", default: "")
-  } else {
-    data.at("org", default: (:)).at("bin", default: "")
-  }
-}
-
-#let sum-text = {
-  let s = data.at("sum", default: none)
-  if type(s) == dictionary {
-    let amt = format-number(s.at("sum", default: 0))
-    let curr = s.at("currency", default: "KZT")
-    let vat = s.at("vat", default: "")
-    (amt, curr, vat).filter(x => str(x) != "").join(" ")
-  } else if s != none {
-    let curr = data.at("currency", default: "")
-    let vat = data.at("vat", default: "")
-    (str(s), curr, vat).filter(x => str(x) != "").join(" ")
-  } else {
-    ""
-  }
-}
-
-#let avans-text = {
-  let p = data.at("pre_payment", default: none)
-  if p != none {
-    let curr = if type(data.at("sum", default: none)) == dictionary {
-      data.sum.at("currency", default: "KZT")
-    } else {
-      data.at("currency", default: "KZT")
-    }
-    format-number(p) + " " + curr
-  } else {
-    let a = data.at("avans", default: "")
-    if a != "" { a + " " + data.at("currency", default: "") } else { "" }
-  }
-}
-
-#let srok-text = {
-  let w = data.at("work_due", default: "")
-  if w != "" {
-    w
-  } else {
-    let s = data.at("srok", default: "")
-    let u = data.at("srok_unit", default: "")
-    (s, u).filter(x => x != "").join(" ")
-  }
-}
-
-#let notes-text = {
-  let n = data.at("special_conditions", default: "")
-  if n != "" { n } else { data.at("notes", default: "") }
-}
-
-// --- Настройки страницы и стилей ---
 #set page(
   paper: "a4",
-  margin: (x: 1.5cm, top: 1.5cm, bottom: 1.8cm),
-  footer: [
-    #align(right)[
-      #text(size: 8pt, fill: rgb("#64748B"))[Стр. #counter(page).display()]
-    ]
-  ]
-)
-#set text(font: ("Liberation Sans", "DejaVu Sans", "Arial"), size: 9.5pt, fill: rgb("#1E293B"), lang: "ru")
-
-#let primary-color = rgb("#0F172A")
-#let border-color = rgb("#CBD5E1")
-#let bg-light = rgb("#F8FAFC")
-#let success-color = rgb("#166534")
-#let success-bg = rgb("#DCFCE7")
-
-// ---- ШАПКА ДОКУМЕНТА ----
-#block(
-  width: 100%,
-  stroke: (bottom: 1.5pt + primary-color),
-  inset: (bottom: 8pt),
-  [
-    #grid(
-      columns: (1fr, auto),
-      align: (left + horizon, right + horizon),
-      [
-        #if org-name != "" [
-          #text(size: 11pt, weight: "bold", fill: primary-color)[#org-name] \
-        ]
-        #if org-bin != "" [
-          #text(size: 8.5pt, fill: rgb("#64748B"))[БИН #org-bin]
-        ]
+  margin: if blank != "" {
+    (x: 1.9cm, top: org.at("top_margin", default: 4.2) * 1cm, bottom: 2.2cm)
+  } else { (x: 1.9cm, top: 1.6cm, bottom: 1.8cm) },
+  background: if blank != "" { image("assets/" + blank, width: 100%, height: 100%) },
+  footer: context {
+    set text(size: 7.5pt, fill: rgb("#6b7480"))
+    let total = counter(page).final().at(0)
+    let has-qr = data.at("qr", default: "") != ""
+    grid(
+      columns: if has-qr { (1.05cm, 1fr, auto) } else { (1fr, auto) },
+      column-gutter: 8pt, align: horizon,
+      ..if has-qr { (image("qr.png", width: 1cm),) },
+      align(left)[
+        Сформировано из системы Doc-V #meta.at("generated_at", default: "")
+        #if meta.at("verify_code", default: "") != "" [
+          · код подлинности #text(weight: "bold")[#meta.verify_code]]
+        #if has-qr [ · QR открывает документ в системе]
       ],
-      [
-        #text(size: 8pt, fill: rgb("#64748B"))[Система электронного документооборота]
-      ]
+      align(right)[#if total > 1 [стр. #counter(page).display() из #total]],
     )
-  ]
+  },
 )
+#set text(font: ("Liberation Sans", "Arial", "DejaVu Sans"), size: 9.5pt,
+          lang: "ru", fill: ink)
+#set par(justify: false)
 
-#v(10pt)
+// ---- вспомогательное ------------------------------------------------------
+#let s(v) = if v == none { "" } else { str(v) }
 
-#align(center)[
-  #text(size: 13pt, weight: "bold", fill: primary-color)[ЛИСТ СОГЛАСОВАНИЯ ДОКУМЕНТА]
-]
-
-#v(10pt)
-
-// ---- РЕКВИЗИТЫ ДОКУМЕНТА ----
-#let doc-number = data.at("document_number", default: "")
-#let doc-date = data.at("document_date", default: "")
-#let doc-title = {
-  if doc-number != "" and doc-date != "" [№ #doc-number (#doc-date)]
-  else if doc-number != "" [№ #doc-number]
-  else [#doc-date]
+#let fmtnum(n) = {
+  if type(n) == int or type(n) == float {
+    let parts = str(n).replace(".", ",").split(",")
+    let g(x) = if x.len() <= 3 { x } else { g(x.slice(0, x.len() - 3)) + " " + x.slice(x.len() - 3) }
+    g(parts.at(0)) + (if parts.len() > 1 { "," + parts.at(1) } else { "" })
+  } else { s(n) }
 }
 
-#let attr-row(label, value) = {
-  if value != none and str(value).trim() != "" {
-    (
-      table.cell(fill: bg-light, align: left + horizon)[#text(weight: "bold")[#label]],
-      table.cell(align: left + horizon)[#value]
-    )
-  } else {
-    ()
+// unix-время -> дд.мм.гггг (алгоритм civil-from-days)
+#let from-unix(ts) = {
+  let days = calc.floor((ts + 18000) / 86400)  // сдвиг на астанинское время
+  let z = days + 719468
+  let era = calc.floor(z / 146097)
+  let doe = z - era * 146097
+  let yoe = calc.floor((doe - calc.floor(doe / 1460) + calc.floor(doe / 36524)
+                        - calc.floor(doe / 146096)) / 365)
+  let y = yoe + era * 400
+  let doy = doe - (365 * yoe + calc.floor(yoe / 4) - calc.floor(yoe / 100))
+  let mp = calc.floor((5 * doy + 2) / 153)
+  let d = doy - calc.floor((153 * mp + 2) / 5) + 1
+  let m = mp + (if mp < 10 { 3 } else { -9 })
+  let y = y + (if m <= 2 { 1 } else { 0 })
+  let pad(x) = if x < 10 { "0" + str(x) } else { str(x) }
+  pad(d) + "." + pad(m) + "." + str(y)
+}
+
+#let is-digits(t) = t.len() > 0 and t.split("").all(c => c == "" or "0123456789".contains(c))
+
+// ISO / unix / как есть
+#let fmtdate(v, with-time: true) = {
+  let t = s(v)
+  if t.len() >= 16 and t.slice(4, 5) == "-" {
+    (t.slice(8, 10) + "." + t.slice(5, 7) + "." + t.slice(0, 4)
+     + (if with-time { " " + t.slice(11, 16) } else { "" }))
+  } else if is-digits(t) and t.len() >= 9 and t.len() <= 11 {
+    from-unix(int(t))
+  } else { t }
+}
+
+#let visa(code) = ("1": "Согласен", "-1": "Не согласен",
+                   "2": "Подписан", "-2": "Не подписан").at(s(code), default: s(code))
+#let visa-ok(code) = s(code) == "1" or s(code) == "2"
+
+#let people = dir.at("structura", default: (:))
+#let positions = dir.at("dolzhnosti", default: (:))
+#let short(uid) = { let t = s(uid); if t.len() > 12 { t.slice(0, 8) + "…?" } else { t } }
+#let person-name(uid) = people.at(s(uid), default: (:)).at("name", default: short(uid))
+#let person-pos(uid-pos, uid-person) = {
+  let p = positions.at(s(uid-pos), default: (:)).at("name", default: "")
+  if p != "" { p } else {
+    people.at(s(uid-person), default: (:)).at("position", default: short(uid-pos))
   }
 }
 
-#let attr-cells = (
-  attr-row("Документ:", doc-title) +
-  attr-row("Предмет договора:", data.at("subject", default: "")) +
-  attr-row("Инициатор:", data.at("initiator", default: "")) +
-  attr-row("Подразделение:", data.at("department", default: "")) +
-  attr-row("Контрагент:", data.at("counteragent", default: "")) +
-  attr-row("Наименование объекта:", data.at("object", default: "")) +
-  attr-row("Сумма договора:", sum-text) +
-  attr-row("Предоплата / Аванс:", avans-text) +
-  attr-row("Срок выполнения:", srok-text) +
-  attr-row("Ответственный юрист:", data.at("lawyer", default: "")) +
-  attr-row("Особые условия:", notes-text)
-)
+// approved_by (сырая таблица) или rows (готовые объекты) -> единый список
+#let rows = {
+  let out = ()
+  let ab = data.at("approved_by", default: ())
+  let nested = (ab.len() > 0 and type(ab.at(0)) == array and ab.at(0).len() > 0
+                and type(ab.at(0).at(0)) == array)
+  let flat = if nested { ab.at(0) } else { ab }
+  for r in flat {
+    if type(r) == array and r.len() >= 5 {
+      out.push((stage: s(r.at(0)), fio: person-name(r.at(2)),
+                position: person-pos(r.at(3), r.at(2)), code: s(r.at(1)),
+                decision: visa(r.at(1)), ok: visa-ok(r.at(1)),
+                date: fmtdate(r.at(4)), raw-date: s(r.at(4)),
+                comment: if r.len() > 5 { s(r.at(5)) } else { "" }))
+    }
+  }
+  for r in data.at("rows", default: ()) {
+    out.push((stage: s(r.at("stage", default: "")), fio: s(r.at("fio", default: "")),
+              position: s(r.at("position", default: "")), code: "1",
+              decision: s(r.at("decision", default: "")), ok: true,
+              date: fmtdate(r.at("date", default: "")), raw-date: s(r.at("date", default: "")),
+              comment: s(r.at("comment", default: ""))))
+  }
+  out
+}
 
-#if attr-cells.len() > 0 {
-  table(
-    columns: (3.8cm, 1fr),
-    stroke: 0.5pt + border-color,
-    inset: 6pt,
-    ..attr-cells.flatten()
+// ---- шапка организации ----------------------------------------------------
+#if blank == "" and org.at("name", default: "") != "" {
+  grid(columns: (1fr, auto), align: horizon,
+    text(size: 11pt, weight: "bold")[#org.name],
+    if org.at("code", default: "") != "" {
+      box(fill: accent, radius: 3pt, inset: (x: 7pt, y: 3pt),
+          text(fill: white, size: 8.5pt, weight: "bold")[#org.code])
+    },
+  )
+  v(0.35em)
+  line(length: 100%, stroke: 1.2pt + accent)
+  v(1.1em)
+}
+
+// ---- заголовок ------------------------------------------------------------
+
+// ---- документ ---------------------------------------------------------
+#let doc-number = {
+  let n = s(data.at("document_number", default: ""))
+  let d = s(data.at("document_date", default: ""))
+  // номер и дата местами перепутаны, если в номере лежит время
+  if is-digits(n) and n.len() >= 9 and not is-digits(d) { d } else { n }
+}
+#let doc-date = {
+  let n = s(data.at("document_number", default: ""))
+  let d = s(data.at("document_date", default: ""))
+  if is-digits(n) and n.len() >= 9 and not is-digits(d) { fmtdate(n, with-time: false) }
+  else { fmtdate(d, with-time: false) }
+}
+
+#let sum-block = {
+  let raw = data.at("sum", default: (:))
+  let one(e) = (fmtnum(e.at("sum", default: "")), s(e.at("currency", default: "")),
+                s(e.at("vat", default: ""))).filter(x => x != "").join(" ")
+  if type(raw) == array { raw.map(one).join("; ") }
+  else if type(raw) == dictionary { one(raw) }
+  else { s(raw) }
+}
+#let avans-block = {
+  let a = data.at("pre_payment", default: "")
+  if a == "" or a == 0 or a == "0" { "" } else {
+    let cur = {
+      let raw = data.at("sum", default: (:))
+      if type(raw) == dictionary { s(raw.at("currency", default: "")) }
+      else if type(raw) == array and raw.len() > 0 { s(raw.at(0).at("currency", default: "")) }
+      else { "" }
+    }
+    (fmtnum(a) + " " + cur).trim()
+  }
+}
+
+// value — строка или готовый контент; пустое поле не печатается
+#let field(label, value) = if value != none and value != "" and value != [] {
+  (text(size: 8.5pt, fill: muted)[#label], [#value])
+} else { () }
+
+#align(center)[
+  #text(size: 15pt, weight: "bold", tracking: 1.2pt)[ЛИСТ СОГЛАСОВАНИЯ]
+  #if doc-number != "" or doc-date != "" [
+    #v(0.25em)
+    #text(size: 9.5pt, fill: muted)[#doc-number #if doc-date != "" [от #doc-date]]
+  ]
+]
+#v(0.9em)
+
+#block(fill: band, radius: 4pt, inset: (x: 12pt, y: 10pt), width: 100%)[
+  #grid(columns: (auto, 1fr), column-gutter: 12pt, row-gutter: 5.5pt,
+    ..(
+      field("Предмет", data.at("subject", default: ""))
+      + field("Контрагент", data.at("counteragent", default: ""))
+      + field("Объект", data.at("object", default: ""))
+      + field("Сторона ГК", org.at("name", default: ""))
+      + field("Инициатор", data.at("initiator", default: ""))
+      + field("Отдел", data.at("department", default: ""))
+      + field("Срок", data.at("work_due", default: ""))
+      + field("Особые условия", data.at("special_conditions", default: ""))
+      + field("Юрист", data.at("lawyer", default: ""))
+    ).flatten()
+  )
+]
+
+#if sum-block != "" or avans-block != "" {
+  v(0.7em)
+  grid(columns: (1fr,) * (if avans-block != "" { 2 } else { 1 }), column-gutter: 10pt,
+    ..((
+      block(width: 100%, inset: (x: 12pt, y: 9pt), radius: 4pt,
+            stroke: 0.7pt + hairline)[
+        #text(size: 8.5pt, fill: muted)[Сумма по документу] \
+        #text(size: 12.5pt, weight: "bold")[#sum-block]
+      ],
+    ) + if avans-block != "" {(
+      block(width: 100%, inset: (x: 12pt, y: 9pt), radius: 4pt,
+            stroke: 0.7pt + hairline)[
+        #text(size: 8.5pt, fill: muted)[Аванс] \
+        #text(size: 12.5pt, weight: "bold")[#avans-block]
+      ],
+    )} else { () })
   )
 }
 
-#v(12pt)
-
-// ---- ХОД СОГЛАСОВАНИЯ ----
-#text(size: 11pt, weight: "bold", fill: primary-color)[Ход согласования и решения]
-#v(6pt)
-
-#let raw-rows = if "approved_by" in data { data.approved_by } else { data.at("rows", default: ()) }
-
-#if raw-rows.len() > 0 {
-  table(
-    columns: (0.8cm, 1.2fr, 1.5fr, 1fr, 1.2fr, 1.5fr),
-    stroke: 0.5pt + border-color,
-    inset: 5.5pt,
-    fill: (col, row) => if row == 0 { bg-light } else { none },
-    align: (col, row) => {
-      if row == 0 { center + horizon }
-      else if col == 0 or col == 3 { center + horizon }
-      else { left + horizon }
-    },
-    table.header(
-      [*№*], [*Этап / Идентификатор*], [*Исполнитель*], [*Решение*], [*Дата и время*], [*Комментарий*]
-    ),
-    ..for (idx, item) in raw-rows.enumerate() {
-      let is-tuple = type(item) == array
-      
-      let step = if is-tuple { item.at(0, default: str(idx + 1)) } else { str(idx + 1) }
-      let user-info = if is-tuple { item.at(3, default: "") } else { item.at("fio", default: "") }
-      let pos-info = if is-tuple { "" } else { item.at("position", default: "") }
-      let is-approved = if is-tuple { item.at(1, default: "1") == "1" } else { item.at("decision", default: "") == "Согласовано" }
-      let decision-text = if is-approved { "Согласовано" } else if is-tuple { "Отклонено" } else { item.at("decision", default: "-") }
-      let dt = if is-tuple { parse-date(item.at(4, default: "")) } else { item.at("date", default: "") }
-      let comment = if is-tuple { item.at(5, default: "") } else { item.at("comment", default: "") }
-
-      (
-        [#(idx + 1)],
-        [Этап #step],
-        [
-          #if pos-info != "" [#text(size: 8pt, fill: rgb("#64748B"))[#pos-info] \ ]
-          #user-info
-        ],
-        [
-          #if is-approved [
-            #box(
-              fill: success-bg,
-              inset: (x: 5pt, y: 3pt),
-              radius: 3pt,
-              outset: 0pt,
-              text(fill: success-color, weight: "bold", size: 8.5pt)[#decision-text]
-            )
-          ] else [
-            #decision-text
-          ]
-        ],
-        [#dt],
-        [#text(size: 8.5pt)[#comment]]
-      )
-    }.flatten()
-  )
-} else [
-  #text(style: "italic", fill: rgb("#64748B"))[Информация о согласовании отсутствует.]
-]
-
-// ---- БЛОК ПРОВЕРКИ И ПОДЛИННОСТИ (ЭЦП / QR) ----
-#v(1fr)
-
-#block(
-  width: 100%,
-  stroke: 0.8pt + primary-color,
-  inset: 8pt,
-  radius: 2pt,
-  fill: rgb("#FAFAFA"),
-  [
-    #grid(
-      columns: if data.at("qr", default: "") != "" or "approved_by" in data { (2.2cm, 1fr) } else { (1fr,) },
-      column-gutter: 12pt,
-      align: horizon,
-      ..if data.at("qr", default: "") != "" or "approved_by" in data {
-        (
-          box(
-            stroke: 0.5pt + border-color,
-            inset: 2pt,
-            fill: rgb("#FFFFFF"),
-            image("qr.png", width: 2cm)
-          ),
-        )
-      },
-      [
-        #text(size: 9pt, weight: "bold", fill: primary-color)[ДОКУМЕНТ ПОДПИСАН ЭЛЕКТРОННОЙ ЦИФРОВОЙ ПОДПИСЬЮ] \
-        #v(2pt)
-        #text(size: 8pt, fill: rgb("#475569"))[
-          Штамп электронного согласования карточки документа #doc-title \
-          Сформировано в СЭД | Организация: #org-name \
-          Статус: Согласовано всеми участниками маршрута
-        ]
-      ]
-    )
+// ---- сводка по согласованиям ----------------------------------------------
+#let ok-count = rows.filter(r => r.ok).len()
+#let all-dates = rows.map(r => r.date).filter(d => d != "")
+#if rows.len() > 0 {
+  v(0.7em)
+  block(width: 100%, fill: band, radius: 3pt, inset: (x: 10pt, y: 7pt))[
+    #set text(size: 8.5pt, fill: muted)
+    Решений: #text(fill: ink, weight: "bold")[#rows.len()],
+    из них положительных: #text(fill: if ok-count == rows.len() { ok-fg } else { no-fg },
+                                weight: "bold")[#ok-count].
+    #if all-dates.len() > 1 [ Период: #all-dates.first() — #all-dates.last().]
   ]
+}
+
+// ---- согласования ---------------------------------------------------------
+#v(1em)
+#grid(columns: (auto, 1fr), align: horizon, column-gutter: 8pt,
+  text(size: 11pt, weight: "bold")[Согласования по документу],
+  line(length: 100%, stroke: 0.7pt + hairline),
 )
+#v(0.6em)
+
+#let badge(r) = box(
+  fill: if r.ok { ok-bg } else { no-bg }, radius: 2.5pt, inset: (x: 6pt, y: 2.5pt),
+  text(size: 8pt, weight: "bold", fill: if r.ok { ok-fg } else { no-fg })[#r.decision])
+
+#if rows.len() == 0 [
+  #text(fill: muted)[Согласований пока нет.]
+] else {
+  // группировка по этапам маршрута
+  let stages = ()
+  for r in rows {
+    if stages.len() > 0 and stages.last().at("stage") == r.stage {
+      stages.last().rows.push(r)
+    } else { stages.push((stage: r.stage, rows: (r,))) }
+  }
+  let cells = ()
+  let idx = 0
+  for (si, g) in stages.enumerate() {
+    if g.stage != "" and stages.len() > 1 {
+      cells.push(table.cell(colspan: 4, fill: white, align: left,
+        inset: (left: 8pt, top: if si == 0 { 2pt } else { 8pt }, bottom: 3pt),
+        text(size: 8pt, weight: "bold", fill: accent, tracking: 0.5pt)[ЭТАП #g.stage]))
+    }
+    for r in g.rows {
+      idx += 1
+      cells.push([#text(fill: muted)[#idx]])
+      cells.push([#text(weight: "bold")[#r.fio] #if r.position != "" [
+        \ #text(size: 8pt, fill: muted)[#r.position]]])
+      cells.push(badge(r))
+      cells.push(text(size: 8.5pt)[#r.date])
+      if r.comment != "" {
+        cells.push(table.cell(colspan: 4, align: left,
+          inset: (left: 26pt, right: 8pt, top: 0pt, bottom: 6pt),
+          text(size: 8pt, fill: muted, style: "italic")[#r.comment]))
+      }
+    }
+  }
+  table(
+    columns: (auto, 1fr, auto, auto),
+    stroke: (x, y) => (bottom: 0.5pt + hairline),
+    inset: (x: 8pt, y: 4.5pt),
+    align: (center + horizon, left + horizon, center + horizon, right + horizon),
+    table.header(
+      table.cell(inset: (x: 8pt, y: 5pt), text(size: 8pt, fill: muted)[№]),
+      table.cell(inset: (x: 8pt, y: 5pt), text(size: 8pt, fill: muted)[Согласующий]),
+      table.cell(inset: (x: 8pt, y: 5pt), text(size: 8pt, fill: muted)[Решение]),
+      table.cell(inset: (x: 8pt, y: 5pt), text(size: 8pt, fill: muted)[Дата]),
+    ),
+    ..cells,
+  )
+}
+
+

@@ -72,18 +72,58 @@ def test_meta_and_qr_available_in_template(client):
     assert client.get(f"/files/{token}").content.startswith(b"%PDF")
 
 
+ACTUAL = {
+    "organization": {"name": 'ТОО "СМУ Аргон"', "code": "СМ", "blank_file_name": ""},
+    "document_number": "1787166000",          # unix-время вместо номера
+    "document_date": "Проект Договор №1917",  # название вместо даты
+    "subject": "Раствор М200", "counteragent": "ИП «SUNKAR»",
+    "object": 'ЖК "Dream Town" 3-очередь',
+    "initiator": "Шелевий Ю.В. (Снабженец)",
+    "department": "Отдел материально-технического снабжения",
+    "lawyer": "Кожабаев Н.Р.", "work_due": "50 дней", "special_conditions": "",
+    "sum": {"currency": "KZT", "sum": 5500000, "vat": "с НДС"},
+    "pre_payment": 5500000,
+    "approved_by": [
+        ["1", "1", "p-1", "d-1", "2026-08-20T14:48:47+05:00", "", "1"],
+        ["2", "-1", "p-2", "d-2", "2026-08-21T10:00:00+05:00", "нужна правка", "1"],
+    ],
+    "qr": "http://192.168.30.29/documents/view/1917",
+}
+
+
 @pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
-def test_list_soglasovaniya_full(client):
-    r = client.post("/render/typst/list_soglasovaniya", json={
-        "org": {"name": "ТОО «Шар-Кұрылыс»", "bin": "000940001102"},
-        "document_number": "12", "document_date": "01.08.2026",
-        "subject": "СМР", "counteragent": "ТОО «Подрядчик»",
-        "sum": "1 000 000", "currency": "KZT", "vat": "с НДС",
-        "rows": [{"position": "Гл. бухгалтер", "fio": "Абдрахманова Х.М.",
-                  "decision": "Согласовано", "date": "25.08.2026"}],
-        "lawyer": "Бекмуратов Е.И.",
-        "qr": "http://192.168.30.29/documents/view/1",
-    }, headers=docv_headers())
+def test_list_soglasovaniya_actual_contract(client):
+    """Фактический контракт: organization и sum объектами, плоский approved_by."""
+    client.post("/directory/structura", headers=docv_headers(), json=[
+        {"uid": "p-1", "display_name": "Шелевий Ю.В.", "position": "Снабженец"},
+        {"uid": "p-2", "display_name": "Бекмуратов Е.И.", "position": "Начальник ЮО"}])
+    r = client.post("/render/typst/list_soglasovaniya", json=ACTUAL, headers=docv_headers())
+    assert r.status_code == 200, r.text
+    token = r.json()["download_url"].rsplit("/", 1)[1]
+    pdf = client.get(f"/files/{token}").content
+    assert pdf.startswith(b"%PDF")
+    import pymupdf
+    doc = pymupdf.open(stream=pdf, filetype="pdf")
+    assert doc.page_count == 1
+    text = doc[0].get_text()
+    # UID расшифрованы, коды визы переведены, unix-время стало датой
+    assert "Шелевий Ю.В." in text and "Начальник ЮО" in text
+    assert "Согласен" in text and "Не согласен" in text
+    assert "20.08.2026" in text and "1787166000" not in text
+    # деньги с разбивкой разрядов, сводка и группировка по этапам
+    assert "5 500 000 KZT с НДС" in text
+    assert "ЭТАП 1" in text and "ЭТАП 2" in text
+    assert "Решений: 2" in text
+    assert "СМ" in text  # код организации в шапке
+
+
+@pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
+def test_list_soglasovaniya_legacy_shapes(client):
+    """Старые формы полей не должны ронять шаблон."""
+    legacy = dict(ACTUAL, organization="ТОО «Строкой»",
+                  sum=[{"currency": "KZT", "sum": 144000, "vat": "с НДС"}],
+                  approved_by=[ACTUAL["approved_by"]])  # лишняя вложенность
+    r = client.post("/render/typst/list_soglasovaniya", json=legacy, headers=docv_headers())
     assert r.status_code == 200, r.text
 
 
