@@ -22,6 +22,12 @@
     </nav>
   </div>
   <div class="right">
+    {% if refreshable %}
+    <label class="online" style="margin:0;cursor:pointer;font-weight:500">
+      <input type="checkbox" id="autorefresh" style="width:auto;height:auto;box-shadow:none">
+      обновлять
+    </label>
+    {% endif %}
     <span class="online"><span class="dot sm live"></span>онлайн</span>
     <span class="user-chip">Администратор</span>
     <a href="/ui/logout" class="muted" style="font-size:12px">Выйти</a>
@@ -31,5 +37,73 @@
 {% if flash %}<div class="flash {{ 'err' if flash_err }}">{{ flash }}</div>{% endif %}
 {% block content %}{% endblock %}
 </main>
+
+<script>
+// Долгие действия: кнопка блокируется и объясняет, что происходит,
+// иначе форму жмут второй раз и получают два реестра.
+document.addEventListener('submit', function (e) {
+  const form = e.target;
+  if (form.dataset.noLock) return;
+  const btn = form.querySelector('button:not([type=button])');
+  if (!btn || btn.dataset.locked) return;
+  setTimeout(function () {
+    btn.dataset.locked = '1';
+    btn.dataset.label = btn.textContent;
+    btn.textContent = btn.dataset.busy || 'Выполняется…';
+    btn.disabled = true;
+  }, 0);
+});
+
+// Копирование значений: ссылки на файлы, curl-строки, токены.
+document.addEventListener('click', function (e) {
+  const el = e.target.closest('[data-copy]');
+  if (!el) return;
+  e.preventDefault();
+  navigator.clipboard.writeText(el.dataset.copy).then(function () {
+    const was = el.textContent;
+    el.textContent = 'скопировано';
+    setTimeout(function () { el.textContent = was; }, 1200);
+  });
+});
+
+// Выбрать все строки таблицы (файлы).
+document.addEventListener('change', function (e) {
+  if (e.target.id !== 'checkall') return;
+  document.querySelectorAll('input[name=tokens]').forEach(function (x) {
+    x.checked = e.target.checked;
+  });
+});
+
+// Ctrl/Cmd+Enter отправляет форму, в которой стоит курсор;
+// Ctrl/Cmd+S сохраняет, не открывая диалог браузера.
+document.addEventListener('keydown', function (e) {
+  const meta = e.ctrlKey || e.metaKey;
+  if (!meta) return;
+  const form = e.target.form;
+  if (e.key === 'Enter' && form) { e.preventDefault(); form.requestSubmit(); }
+  if (e.key.toLowerCase() === 's') {
+    const target = document.querySelector('form[data-hotkey-save]');
+    if (target) { e.preventDefault(); target.requestSubmit(); }
+  }
+});
+
+// Автообновление живых страниц — состояние переключателя запоминается.
+(function () {
+  const box = document.getElementById('autorefresh');
+  if (!box) return;
+  const KEY = 'gw_autorefresh';
+  box.checked = localStorage.getItem(KEY) === '1';
+  let timer = null;
+  function apply() {
+    if (timer) { clearInterval(timer); timer = null; }
+    if (box.checked) timer = setInterval(function () { location.reload(); }, 15000);
+  }
+  box.addEventListener('change', function () {
+    localStorage.setItem(KEY, box.checked ? '1' : '0');
+    apply();
+  });
+  apply();
+})();
+</script>
 </body>
 </html>

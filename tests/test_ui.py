@@ -290,3 +290,49 @@ def test_settings_page_masks_tokens(client):
     text = client.get("/ui/settings").text
     assert "GW_TOKEN_DOCV" in text
     assert "test-docv-token" not in text  # значение не раскрывается
+
+
+def test_dates_are_human_and_local(client):
+    """В интерфейсе не должно оставаться ISO-дат в UTC."""
+    _login(client)
+    client.app.state.filestore.save_bytes(b"x", ".txt", "файл.txt")
+    text = client.get("/ui/files").text
+    assert "+00:00" not in text and "T08:" not in text
+    import re
+    assert re.search(r"\d\d\.\d\d\.20\d\d \d\d:\d\d", text)  # дд.мм.гггг чч:мм
+    assert "назад" in text or "только что" in text
+
+
+def test_jobs_search_and_payload_visible(client):
+    _login(client)
+    q = client.app.state.jobs
+    q.enqueue(producer="1c", job_type="оплата", payload={"счёт": "KZ12"},
+              idempotency_key=None)
+    q.enqueue(producer="ui", job_type="тест", payload={"x": 1}, idempotency_key=None)
+
+    text = client.get("/ui/jobs").text
+    assert "KZ12" in text  # payload виден прямо в строке
+
+    only = client.get("/ui/jobs?search=оплата").text
+    assert "оплата" in only and ">тест<" not in only
+    by_producer = client.get("/ui/jobs?producer=ui").text
+    assert "тест" in by_producer and "оплата" not in by_producer
+    # поиск по содержимому payload
+    assert "оплата" in client.get("/ui/jobs?search=KZ12").text
+    assert "Ничего не нашлось" in client.get("/ui/jobs?search=неттакого").text
+
+
+def test_files_search_and_paging(client):
+    _login(client)
+    store = client.app.state.filestore
+    for i in range(55):
+        store.save_bytes(b"x", ".txt", f"отчёт-{i}.txt")
+    store.save_bytes(b"x", ".txt", "реестр.txt")
+
+    page = client.get("/ui/files").text
+    assert "Показать ещё" in page              # постранично, а не всё сразу
+    assert page.count("копировать ссылку") == 50
+    assert "всего 56" in page
+
+    found = client.get("/ui/files?search=реестр").text
+    assert "реестр.txt" in found and "Показать ещё" not in found

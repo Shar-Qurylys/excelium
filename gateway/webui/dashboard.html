@@ -83,7 +83,7 @@
       <div class="feed-row">
         <span class="name mono">{{ d.name }}</span>
         <span class="chip neutral">{{ d.count }}</span>
-        <span class="mono muted">{{ d.updated_at }}</span>
+        <span class="mono muted">{{ d.updated_at|dt }}</span>
       </div>
       {% else %}
       <div class="empty">Пока не приходили. Прогоните отправку из «Шлюза».</div>

@@ -4,54 +4,73 @@
 <div class="page-head">
   <div>
     <h1>Хранилище файлов</h1>
-    <span class="sub">файлы живут {{ ttl_hours }} часов, ссылки выдаются по токену</span>
+    <span class="sub">файлы живут {{ ttl_hours }} часов, ссылки выдаются по токену · всего {{ total }}</span>
   </div>
   <div class="head-actions">
     <form method="post" action="/ui/files/upload" enctype="multipart/form-data"
           style="display:flex;gap:8px;align-items:center">
       <input type="file" name="uploads" multiple style="width:290px">
-      <button class="btn">Загрузить</button>
+      <button class="btn" data-busy="Загружаем…">Загрузить</button>
     </form>
   </div>
 </div>
 
+<form class="filters" method="get" action="/ui/files" data-no-lock>
+  <input type="text" name="search" value="{{ search }}" placeholder="имя файла" style="min-width:260px">
+  <button class="btn ghost">Искать</button>
+  {% if search %}<a class="muted" style="font-size:13px" href="/ui/files">Сбросить</a>{% endif %}
+  <span class="chip neutral" style="margin-left:auto">показано: {{ rows|length }}</span>
+</form>
+
 <div class="card">
   {% if rows %}
-  <form id="dlform" method="post" action="/ui/files/download_zip"></form>
+  <form id="dlform" method="post" action="/ui/files/download_zip" data-no-lock></form>
   <table>
     <thead><tr>
-      <th style="width:16px"></th><th style="width:100px"></th>
+      <th style="width:16px"><input type="checkbox" id="checkall" style="width:auto;height:auto;box-shadow:none" title="Выбрать все"></th>
+      <th style="width:100px"></th>
       <th>Имя <span style="text-transform:none;letter-spacing:0;font-weight:400">(правится на месте)</span></th>
-      <th class="num">Размер</th><th>Создан</th><th></th>
+      <th class="num" style="width:100px">Размер</th><th style="width:170px">Создан</th><th></th>
     </tr></thead>
     <tbody>
     {% for f in rows %}
     <tr>
-      <td><input type="checkbox" name="tokens" value="{{ f.token }}" form="dlform"></td>
+      <td><input type="checkbox" name="tokens" value="{{ f.token }}" form="dlform"
+                 style="width:auto;height:auto;box-shadow:none"></td>
       <td>{% if f.is_image %}<img class="thumb" src="/files/{{ f.token }}" alt="">{% endif %}</td>
       <td>
         <form class="inline" method="post" action="/ui/files/rename/{{ f.token }}"
               style="display:flex;gap:6px;align-items:center">
           <input type="text" name="new_name" value="{{ f.orig_name }}" style="max-width:280px">
-          <button class="btn ghost sm" title="Переименовать">✓</button>
+          <button class="btn ghost sm" title="Переименовать" data-busy="…">✓</button>
         </form>
+        <a class="muted" style="font-size:12px;cursor:pointer"
+           data-copy="{{ base_url }}/files/{{ f.token }}">копировать ссылку</a>
       </td>
       <td class="num mono">{{ "%.1f"|format(f.size / 1024) }} КБ</td>
-      <td class="mono muted">{{ f.created_at }}</td>
+      <td>{{ f.created_at|dt }}<div class="muted" style="font-size:12px">{{ f.created_at|ago }}</div></td>
       <td><div class="actions">
-        <a class="btn ghost sm" href="/files/{{ f.token }}">скачать</a>
+        <a class="btn ghost sm" href="/files/{{ f.token }}" target="_blank">открыть</a>
         {% if f.is_image %}
         <form class="inline" method="post" action="/ui/files/to_assets/{{ f.token }}">
-          <button class="btn ghost sm" title="Станет доступна шаблонам">в картинки</button></form>
+          <button class="btn ghost sm" title="Станет доступна шаблонам" data-busy="…">в картинки</button></form>
         {% endif %}
-        <form class="inline" method="post" action="/ui/files/delete/{{ f.token }}">
-          <button class="btn danger sm">удалить</button></form>
+        <form class="inline" method="post" action="/ui/files/delete/{{ f.token }}"
+              onsubmit="return confirm('Удалить «{{ f.orig_name }}»? Ссылки на него перестанут работать.')">
+          <button class="btn danger sm" data-busy="…">удалить</button></form>
       </div></td>
     </tr>
     {% endfor %}
     </tbody>
   </table>
-  <div class="card-body"><button class="btn ghost" form="dlform">Скачать выбранные архивом</button></div>
-  {% else %}<div class="empty">Хранилище пусто.</div>{% endif %}
+  <div class="card-body" style="display:flex;gap:10px;align-items:center">
+    <button class="btn ghost" form="dlform" data-busy="Собираем архив…">Скачать выбранные архивом</button>
+    {% if has_more %}
+    <a class="btn ghost" href="/ui/files?limit={{ next_limit }}&search={{ search }}">Показать ещё</a>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="empty">{% if search %}Ничего не нашлось — снимите фильтр.{% else %}Хранилище пусто. Сюда попадают собранные реестры и PDF, а также всё, что вы загрузите сами.{% endif %}</div>
+  {% endif %}
 </div>
 {% endblock %}

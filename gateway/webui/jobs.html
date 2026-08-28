@@ -8,64 +8,89 @@
   </div>
   <div class="head-actions">
     <a class="btn ghost" href="/ui/jobs">Обновить</a>
+    <a class="btn" href="#new">＋ Тестовое задание</a>
   </div>
 </div>
 
-<div class="filters">
-  <form method="get" action="/ui/jobs" style="display:flex;gap:10px;align-items:center">
-    <select name="status" onchange="this.form.submit()">
-      <option value="">Все статусы</option>
-      {% for value, title in (('pending','В очереди'), ('leased','Выданы Doc-V'), ('acked','Подтверждены')) %}
-      <option value="{{ value }}" {{ 'selected' if value == status_filter }}>{{ title }}</option>
-      {% endfor %}
-    </select>
-  </form>
-  <span class="chip neutral">всего: {{ rows|length }}</span>
-  {% if status_filter %}<a class="muted" style="font-size:13px" href="/ui/jobs">Сбросить</a>{% endif %}
-</div>
+<form class="filters" method="get" action="/ui/jobs" data-no-lock>
+  <input type="text" name="search" value="{{ search }}" placeholder="номер, тип или содержимое"
+         style="min-width:260px">
+  <select name="status" onchange="this.form.submit()">
+    <option value="">Все статусы</option>
+    {% for value, title in (('pending','В очереди'), ('leased','Выданы Doc-V'), ('acked','Подтверждены')) %}
+    <option value="{{ value }}" {{ 'selected' if value == status_filter }}>{{ title }}</option>
+    {% endfor %}
+  </select>
+  <select name="producer" onchange="this.form.submit()">
+    <option value="">Все продюсеры</option>
+    {% for p in producers %}
+    <option value="{{ p }}" {{ 'selected' if p == producer }}>{{ p }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn ghost">Искать</button>
+  {% if search or status_filter or producer %}
+  <a class="muted" style="font-size:13px" href="/ui/jobs">Сбросить</a>
+  {% endif %}
+  <span class="chip neutral" style="margin-left:auto">показано: {{ rows|length }}</span>
+</form>
 
 <div class="card">
   {% if rows %}
   <table>
     <thead><tr>
-      <th>ID</th><th>Продюсер</th><th>Тип</th><th>Статус</th>
-      <th class="num">Попыток</th><th>Создано</th><th>Аренда до</th><th></th>
+      <th style="width:60px">№</th><th style="width:110px">Продюсер</th><th>Тип и содержимое</th>
+      <th style="width:120px">Статус</th><th class="num" style="width:80px">Попыток</th>
+      <th style="width:150px">Создано</th><th style="width:150px">Аренда до</th><th></th>
     </tr></thead>
     <tbody>
     {% for j in rows %}
     <tr>
       <td class="mono">{{ j.id }}</td>
       <td>{{ j.producer }}</td>
-      <td class="strong">{{ j.type }}</td>
+      <td>
+        <div class="strong">{{ j.type }}</div>
+        <details style="margin-top:4px">
+          <summary class="muted" style="cursor:pointer;font-size:12px">payload</summary>
+          <pre class="out" style="margin-top:6px;max-height:220px">{{ j.payload }}</pre>
+        </details>
+      </td>
       <td><span class="chip {{ j.status }}">{{ status_titles.get(j.status, j.status) }}</span></td>
       <td class="num">{{ j.attempts }}</td>
-      <td class="mono muted">{{ j.created_at }}</td>
-      <td class="mono muted">{{ j.leased_until or "—" }}</td>
+      <td>{{ j.created_at|dt }}<div class="muted" style="font-size:12px">{{ j.created_at|ago }}</div></td>
+      <td class="mono muted">{{ j.leased_until|dt }}</td>
       <td><div class="actions">
         {% if j.status != 'acked' %}
-        <form class="inline" method="post" action="/ui/jobs/ack/{{ j.id }}">
-          <button class="btn ghost sm">подтвердить</button></form>
+        <form class="inline" method="post" action="/ui/jobs/ack/{{ j.id }}"
+              onsubmit="return confirm('Подтвердить задание №{{ j.id }}? Doc-V больше его не получит.')">
+          <button class="btn ghost sm" data-busy="…">подтвердить</button></form>
         {% endif %}
       </div></td>
     </tr>
     {% endfor %}
     </tbody>
   </table>
-  {% else %}<div class="empty">Заданий нет.</div>{% endif %}
+  {% if has_more %}
+  <div class="card-body" style="text-align:center">
+    <a class="btn ghost" href="/ui/jobs?limit={{ next_limit }}&status={{ status_filter }}&search={{ search }}&producer={{ producer }}">Показать ещё</a>
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="empty">{% if search or status_filter or producer %}Ничего не нашлось — снимите фильтры.{% else %}Заданий нет: продюсеры кладут их через <span class="mono">POST /jobs</span>, а Doc-V забирает опросом.{% endif %}</div>
+  {% endif %}
 </div>
 
-<div class="card">
+<div class="card" id="new">
   <div class="card-head">
     <span class="card-title">Тестовое задание</span>
-    <span class="card-note">попадёт в очередь от продюсера «ui»</span>
+    <span class="card-note">попадёт в очередь от продюсера «ui» — Doc-V заберёт его следующим опросом</span>
   </div>
   <div class="card-body">
     <form method="post" action="/ui/jobs/new">
       <label>Тип задания</label>
       <input type="text" name="type" value="тест" style="max-width:420px">
-      <label>Payload (JSON)</label>
+      <label>Payload (JSON) <span class="hint">Ctrl+Enter отправляет</span></label>
       <textarea name="payload" rows="4">{"пример": true}</textarea>
-      <button class="btn" style="margin-top:14px">Поставить в очередь</button>
+      <button class="btn" style="margin-top:14px" data-busy="Ставим в очередь…">Поставить в очередь</button>
     </form>
   </div>
 </div>

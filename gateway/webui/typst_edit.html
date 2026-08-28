@@ -7,7 +7,7 @@
     <span class="sub"><a href="/ui/typst">Шаблоны</a> · <span class="mono">POST /render/typst/{{ name }}</span></span>
   </div>
   <div class="head-actions">
-    {% if link %}<a class="btn" href="{{ link }}">Скачать PDF</a>{% endif %}
+    {% if link %}<a class="btn" href="{{ link }}" target="_blank">Открыть PDF</a>{% endif %}
     <form class="inline" method="post" action="/ui/typst/{{ name }}/delete"
           onsubmit="return confirm('Удалить шаблон {{ name }}?')">
       <button class="btn danger">Удалить</button></form>
@@ -20,9 +20,10 @@
     <span class="card-note">прежняя версия уходит в историю, хранится {{ history_keep }}</span>
   </div>
   <div class="card-body">
-    <form method="post" action="/ui/typst/{{ name }}/save">
+    <form method="post" action="/ui/typst/{{ name }}/save" data-hotkey-save>
       <textarea name="source" rows="24" spellcheck="false">{{ source }}</textarea>
-      <button class="btn" style="margin-top:14px">Сохранить</button>
+      <button class="btn" style="margin-top:14px" data-busy="Сохраняем…">Сохранить</button>
+      <span class="card-note" style="margin-left:12px">Ctrl+S сохраняет, не выходя из редактора</span>
     </form>
   </div>
 </div>
@@ -36,7 +37,9 @@
     <div class="card-body">
       <form method="post" action="/ui/typst/{{ name }}/test">
         <textarea name="data" rows="8">{{ test_data }}</textarea>
-        <button class="btn" style="margin-top:14px" {{ 'disabled' if not typst }}>Собрать PDF</button>
+        <button class="btn" style="margin-top:14px" data-busy="Собираем PDF…"
+                {{ 'disabled' if not typst }}>Собрать PDF</button>
+        <span class="card-note" style="margin-left:12px">Ctrl+Enter — тоже сборка</span>
       </form>
       {% if error %}<pre class="out" style="margin-top:12px">{{ error }}</pre>{% endif %}
     </div>
@@ -68,7 +71,7 @@
         <tbody>
         {% for h in history %}
         <tr>
-          <td class="mono muted">{{ h.saved_at }}</td>
+          <td class="mono muted">{{ h.saved_at|dt }}</td>
           <td class="num mono">{{ h.size }}</td>
           <td><div class="actions">
             <form class="inline" method="post" action="/ui/typst/{{ name }}/restore/{{ h.id }}">

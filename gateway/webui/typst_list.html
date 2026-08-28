@@ -9,7 +9,7 @@
   <div class="head-actions">
     <form method="post" action="/ui/typst/create" style="display:flex;gap:8px;align-items:center">
       <input type="text" name="name" placeholder="имя нового шаблона" style="width:230px">
-      <button class="btn">Создать</button>
+      <button class="btn" data-busy="Создаём…">Создать</button>
     </form>
   </div>
 </div>
@@ -28,7 +28,7 @@
       <tr>
         <td><a class="strong" href="/ui/typst/{{ t.name }}">{{ t.name }}</a></td>
         <td class="num mono">{{ t.size }}</td>
-        <td class="mono muted">{{ t.updated_at }}</td>
+        <td class="mono muted">{{ t.updated_at|dt }}</td>
       </tr>
       {% endfor %}
       </tbody>
@@ -51,8 +51,9 @@
         <td class="mono">assets/{{ a.name }}</td>
         <td class="num mono">{{ "%.1f"|format(a.size / 1024) }} КБ</td>
         <td><div class="actions">
-          <form class="inline" method="post" action="/ui/typst/assets/delete/{{ a.name }}">
-            <button class="btn danger sm">удалить</button></form>
+          <form class="inline" method="post" action="/ui/typst/assets/delete/{{ a.name }}"
+                onsubmit="return confirm('Удалить картинку {{ a.name }}? Шаблоны, где она подключена, перестанут собираться.')">
+            <button class="btn danger sm" data-busy="…">удалить</button></form>
         </div></td>
       </tr>
       {% endfor %}
@@ -63,7 +64,7 @@
       <form method="post" action="/ui/typst/assets/upload" enctype="multipart/form-data"
             style="display:flex;gap:8px;align-items:center">
         <input type="file" name="uploads" multiple accept=".png,.jpg,.jpeg,.gif,.svg">
-        <button class="btn ghost">Загрузить</button>
+        <button class="btn ghost" data-busy="Загружаем…">Загрузить</button>
       </form>
       <div class="card-note" style="margin-top:10px">В шаблоне подключаются как
         <span class="mono">#image("assets/имя.png")</span>; фирменные бланки — через

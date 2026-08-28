@@ -48,7 +48,8 @@
           </div>
           <label>Тело запроса (JSON)</label>
           <textarea name="body" rows="8">{{ body }}</textarea>
-          <button class="btn" style="margin-top:14px">Отправить</button>
+          <button class="btn" style="margin-top:14px" data-busy="Отправляем…">Отправить</button>
+          <span class="card-note" style="margin-left:12px">Ctrl+Enter отправляет</span>
         </form>
       </div>
     </div>
@@ -64,7 +65,8 @@
       </div>
       <div class="card-body">
         <pre class="out">{{ result.text }}</pre>
-        <label>Тот же запрос из терминала</label>
+        <label>Тот же запрос из терминала
+          <a class="hint" style="cursor:pointer" data-copy="{{ result.curl }}">копировать</a></label>
         <pre class="out">{{ result.curl }}</pre>
       </div>
     </div>

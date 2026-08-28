@@ -99,17 +99,32 @@ class JobQueue:
                     acked.append(job_id)
         return {"acked": acked, "already_acked": already, "unknown": unknown}
 
-    def list_jobs(self, *, status: str | None = None, limit: int = 200) -> list[dict]:
+    def list_jobs(self, *, status: str | None = None, search: str = "",
+                  producer: str = "", limit: int = 200) -> list[dict]:
+        """search ищет по номеру, типу и содержимому payload."""
         query = ("SELECT id, consumer, producer, type, status, attempts,"
-                 " leased_until, created_at, acked_at FROM jobs")
-        args: list = []
+                 " leased_until, created_at, acked_at, payload FROM jobs")
+        where, args = [], []
         if status:
-            query += " WHERE status = ?"
+            where.append("status = ?")
             args.append(status)
+        if producer:
+            where.append("producer = ?")
+            args.append(producer)
+        if search:
+            where.append("(CAST(id AS TEXT) = ? OR type LIKE ? OR payload LIKE ?)")
+            args += [search, f"%{search}%", f"%{search}%"]
+        if where:
+            query += " WHERE " + " AND ".join(where)
         query += " ORDER BY id DESC LIMIT ?"
         args.append(limit)
         with connect(self.db_path) as conn:
             return [dict(r) for r in conn.execute(query, args).fetchall()]
+
+    def producers(self) -> list[str]:
+        with connect(self.db_path) as conn:
+            return [r["producer"] for r in conn.execute(
+                "SELECT DISTINCT producer FROM jobs ORDER BY producer").fetchall()]
 
     def stats(self) -> dict[str, int]:
         with connect(self.db_path) as conn:

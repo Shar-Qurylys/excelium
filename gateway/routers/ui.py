@@ -34,6 +34,50 @@ templates = Jinja2Templates(directory=APP_DIR / "gateway" / "webui")
 DS_CSS = (APP_DIR / "gateway" / "webui" / "ds.css").read_text(encoding="utf-8")
 templates.env.globals["ds_css"] = DS_CSS
 
+
+def _dt(value, with_time: bool = True) -> str:
+    """ISO-строка (обычно UTC) -> «28.08.2026 13:08» по Астане.
+
+    В интерфейсе не должно оставаться машинных дат: администратор
+    сверяет их с часами на стене, а не с UTC.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return "—"
+    try:
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        return text
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    moment = moment.astimezone(ALMATY)
+    return moment.strftime("%d.%m.%Y %H:%M" if with_time else "%d.%m.%Y")
+
+
+def _ago(value) -> str:
+    """«3 минуты назад» — для колонок, где важна свежесть, а не дата."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        return ""
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    seconds = int((datetime.now(timezone.utc) - moment).total_seconds())
+    if seconds < 60:
+        return "только что"
+    if seconds < 3600:
+        return f"{seconds // 60} мин назад"
+    if seconds < 86400:
+        return f"{seconds // 3600} ч назад"
+    return f"{seconds // 86400} дн назад"
+
+
+templates.env.filters["dt"] = _dt
+templates.env.filters["ago"] = _ago
+
 AUDIT_TAIL = 50
 ALMATY = timezone(timedelta(hours=5))
 EVENT_TITLES = {
@@ -71,9 +115,13 @@ SAMPLE = json.dumps({"request": [{
 }]}, ensure_ascii=False, indent=1)
 
 
+REFRESHABLE = {"dash", "jobs"}
+
+
 def _page(request: Request, template: str, page: str, **ctx) -> HTMLResponse:
     return templates.TemplateResponse(
-        request, template, {"page": page, **ctx})
+        request, template,
+        {"page": page, "refreshable": page in REFRESHABLE, **ctx})
 
 
 # --- вход/выход -----------------------------------------------------------
@@ -180,11 +228,20 @@ JOB_STATUS_TITLES = {"pending": "в очереди", "leased": "выдано Doc
                      "acked": "подтверждено"}
 
 
+PAGE_SIZE = 50
+
+
 @router.get("/ui/jobs")
-def jobs_page(request: Request, status: str = "", flash: str = ""):
-    rows = request.app.state.jobs.list_jobs(status=status or None)
-    return _page(request, "jobs.html", "jobs", rows=rows, status_filter=status,
-                 status_titles=JOB_STATUS_TITLES, flash=flash)
+def jobs_page(request: Request, status: str = "", search: str = "",
+              producer: str = "", limit: int = PAGE_SIZE, flash: str = ""):
+    queue = request.app.state.jobs
+    rows = queue.list_jobs(status=status or None, search=search.strip(),
+                           producer=producer, limit=limit + 1)
+    has_more = len(rows) > limit
+    return _page(request, "jobs.html", "jobs", rows=rows[:limit], status_filter=status,
+                 search=search, producer=producer, producers=queue.producers(),
+                 status_titles=JOB_STATUS_TITLES, has_more=has_more,
+                 next_limit=limit + PAGE_SIZE, flash=flash)
 
 
 @router.post("/ui/jobs/ack/{job_id}")
@@ -201,9 +258,11 @@ def jobs_new(request: Request, type: str = Form(...), payload: str = Form(...)):
         if not isinstance(data, dict):
             raise ValueError
     except ValueError:
-        rows = request.app.state.jobs.list_jobs()
-        return _page(request, "jobs.html", "jobs", rows=rows, status_filter="",
-                     status_titles=JOB_STATUS_TITLES,
+        queue = request.app.state.jobs
+        return _page(request, "jobs.html", "jobs", rows=queue.list_jobs(limit=PAGE_SIZE),
+                     status_filter="", search="", producer="",
+                     producers=queue.producers(), status_titles=JOB_STATUS_TITLES,
+                     has_more=False, next_limit=PAGE_SIZE,
                      flash="Payload — не JSON-объект", flash_err=True)
     job_id, _ = request.app.state.jobs.enqueue(
         producer="ui", job_type=type.strip() or "тест", payload=data,
@@ -215,11 +274,18 @@ def jobs_new(request: Request, type: str = Form(...), payload: str = Form(...)):
 # --- файлы ----------------------------------------------------------------
 
 @router.get("/ui/files")
-def files_page(request: Request, flash: str = ""):
+def files_page(request: Request, search: str = "", limit: int = PAGE_SIZE,
+               flash: str = ""):
     rows = request.app.state.filestore.list_files()
-    for f in rows:
-        f["is_image"] = f["suffix"].lower() in IMAGE_SUFFIXES
-    return _page(request, "files.html", "files", rows=rows,
+    needle = search.strip().lower()
+    if needle:
+        rows = [f for f in rows if needle in f["orig_name"].lower()]
+    total = len(rows)
+    return _page(request, "files.html", "files", rows=[
+                     dict(f, is_image=f["suffix"].lower() in IMAGE_SUFFIXES)
+                     for f in rows[:limit]],
+                 total=total, has_more=total > limit, next_limit=limit + PAGE_SIZE,
+                 search=search, base_url=request.app.state.settings.base_url,
                  ttl_hours=request.app.state.settings.file_ttl_hours, flash=flash)
 
 
@@ -336,11 +402,14 @@ async def ops_run(request: Request, name: str):
 
 # --- рендер ---------------------------------------------------------------
 
+TYPST_SAMPLE = '{"title": "Справка", "fields": {"Поле": "Значение"}}'
+
+
 @router.get("/ui/render")
 def render_page(request: Request, link: str = "", link_name: str = ""):
     return _page(request, "render.html", "render", sample=SAMPLE,
                  typst=typst_available(), typst_templates=_typst_templates(request),
-                 link=link, link_name=link_name)
+                 typst_data=TYPST_SAMPLE, link=link, link_name=link_name)
 
 
 @router.post("/ui/render/registry")
@@ -352,6 +421,7 @@ def render_registry(request: Request, kind: str = Form(...), data: str = Form(..
     except (ValueError, AttributeError, AssertionError):
         return _page(request, "render.html", "render", sample=data,
                      typst=typst_available(), typst_templates=_typst_templates(request),
+                     typst_data=TYPST_SAMPLE,
                      flash="Нужен JSON вида {\"request\": [...]}", flash_err=True)
     try:
         if kind == "outer":
@@ -368,6 +438,7 @@ def render_registry(request: Request, kind: str = Form(...), data: str = Form(..
         log.exception("ui render failed")
         return _page(request, "render.html", "render", sample=data,
                      typst=typst_available(), typst_templates=_typst_templates(request),
+                     typst_data=TYPST_SAMPLE,
                      flash=f"Ошибка рендера: {exc}", flash_err=True)
     delivered = _deliver(request, workbook, name)
     return RedirectResponse(
@@ -379,7 +450,7 @@ def render_registry(request: Request, kind: str = Form(...), data: str = Form(..
 def render_typst_ui(request: Request, template: str = Form(...), data: str = Form(...)):
     store = request.app.state.typst_store
     ctx = dict(sample=SAMPLE, typst=typst_available(),
-               typst_templates=_typst_templates(request))
+               typst_templates=_typst_templates(request), typst_data=data)
     try:
         parsed = json.loads(data)
     except ValueError:

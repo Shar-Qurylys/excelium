@@ -24,7 +24,10 @@
   <div class="card-body">
     {% if result.files %}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-      {% for f in result.files %}<a class="btn" href="{{ f.download_url }}">{{ f.name }}</a>{% endfor %}
+      {% for f in result.files %}
+      <a class="btn" href="{{ f.download_url }}" target="_blank">{{ f.name }}</a>
+      <a class="btn ghost" data-copy="{{ f.download_url }}" href="#">копировать ссылку</a>
+      {% endfor %}
     </div>
     {% endif %}
     {% if result.stdout %}<pre class="out">{{ result.stdout }}</pre>{% endif %}
@@ -64,7 +67,7 @@
           </select>
         {% endif %}
       {% endfor %}
-      <button class="btn" style="margin-top:14px">Запустить</button>
+      <button class="btn" style="margin-top:14px" data-busy="Выполняется…">Запустить</button>
     </form>
   </div>
 </div>
