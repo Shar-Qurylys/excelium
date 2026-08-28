@@ -1,78 +1,102 @@
 {% extends "base.html" %}
-{% block title %}Обзор — Doc-V Gateway{% endblock %}
+{% block title %}Рабочий стол — Doc-V Gateway{% endblock %}
 {% block content %}
-<h1>Обзор</h1>
-<div class="cards">
-  <div class="stat"><div class="label">Typst</div>
-    <div class="value">{{ "есть" if typst else "нет" }}</div>
-    <div class="muted mono" style="font-size:12px">{{ typst_path or "не найден в PATH" }}</div></div>
-  <div class="stat"><div class="label">LibreOffice</div>
-    <div class="value">{{ "есть" if libreoffice else "нет" }}</div>
-    <div class="muted mono" style="font-size:12px">{{ libreoffice_path or "не найден в PATH" }}</div></div>
-  <div class="stat"><div class="label">Файлов в хранилище</div>
-    <div class="value">{{ files_count }} <span class="muted" style="font-size:14px">({{ files_mb }} МБ)</span></div></div>
-  <div class="stat"><div class="label">Задания: в очереди / выданы / готово</div>
-    <div class="value">{{ jobs.get('pending', 0) }} / {{ jobs.get('leased', 0) }} / {{ jobs.get('acked', 0) }}</div></div>
-</div>
-<div class="card">
-  <h2 style="margin-top:0">Связь с Doc-V</h2>
-  <p class="muted">«Опрос очереди» показывает, жив ли планировщик задач на
-    сервере Doc-V: точка «Шлюз → Опрос» должна дёргать очередь каждые
-    30 секунд. Планировщик не попадает в экспорт конфигурации, поэтому
-    это единственное место, где его смерть видна.</p>
-  <table>
-    <tr><th>Канал</th><th>Последний раз</th><th>Когда (UTC)</th></tr>
+
+<div class="status-bar">
+  <div style="display:flex;align-items:center;gap:10px">
+    <span class="dot live"></span>
+    <span class="title">{{ health_title }}</span>
+    <span class="card-note">{{ now_line }}</span>
+  </div>
+  <div class="items">
     {% for b in beats %}
-    <tr>
-      <td>{{ b.label }}</td>
-      <td><span class="badge {{ 'ok' if b.status == 'ok' else ('pending' if b.status == 'warn' else 'leased') }}">{{ b.text }}</span></td>
-      <td class="mono muted">{{ b.seen_at }}</td>
-    </tr>
+    <span class="status-item"><span class="dot {{ b.dot }}"></span>{{ b.label }} — {{ b.text }}</span>
     {% endfor %}
-  </table>
+    <span class="status-item"><span class="dot {{ '' if typst else 'warn' }}"></span>
+      Typst {{ 'на месте' if typst else 'не найден' }}</span>
+    <span class="status-item"><span class="dot {{ '' if libreoffice else 'warn' }}"></span>
+      LibreOffice {{ 'на месте' if libreoffice else 'не найден' }}</span>
+  </div>
 </div>
-<div class="card">
-  <h2 style="margin-top:0">Справочники из Doc-V</h2>
-  <p class="muted">Их присылает тип «Шлюз» (POST /directory/&lt;имя&gt;). Шлюз
-    подставляет их вместо UID-ов в печатные формы, поэтому устаревший
-    справочник виден на листе как «8 знаков…?».</p>
-  {% if directories %}
-  <table>
-    <tr><th>Справочник</th><th>Записей</th><th>Обновлён (UTC)</th><th>Поля</th></tr>
-    {% for d in directories %}
-    <tr>
-      <td class="mono">{{ d.name }}</td>
-      <td>{{ d.count }}</td>
-      <td class="mono muted">{{ d.updated_at }}</td>
-      <td class="mono muted" style="font-size:12px">{{ d.columns }}</td>
-    </tr>
+
+<div class="page-head">
+  <div>
+    <h1>Рабочий стол</h1>
+    <span class="sub">{{ today_line }}</span>
+  </div>
+  <div class="head-actions">
+    <a class="btn ghost" href="/ui/jobs">К очереди</a>
+    <a class="btn" href="/ui/render">Собрать документ</a>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><span class="label">В очереди</span><span class="value">{{ jobs.get('pending', 0) }}</span></div>
+  <div class="stat"><span class="label">Выданы Doc-V</span><span class="value">{{ jobs.get('leased', 0) }}</span></div>
+  <div class="stat"><span class="label">Подтверждено</span><span class="value">{{ jobs.get('acked', 0) }}</span></div>
+  <div class="stat"><span class="label">Файлов в хранилище</span><span class="value">{{ files_count }} <span class="muted" style="font-size:14px">({{ files_mb }} МБ)</span></span></div>
+  <div class="stat"><span class="label">Шаблонов Typst</span><span class="value">{{ templates_count }}</span></div>
+  <div class="stat"><span class="label">Операций в реестре</span><span class="value">{{ ops_count }}</span></div>
+  <div class="stat"><span class="label">Отказов за сутки</span><span class="value">{{ denies }}</span></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Лента событий</span>
+      <span class="online"><span class="dot sm live"></span>журнал шлюза</span>
+    </div>
+    {% for e in events %}
+    <div class="feed-row {{ 'hl' if loop.first }}">
+      <span class="dot {{ e.dot }}"></span>
+      <span class="time">{{ e.time }}</span>
+      <span class="text">{{ e.text }}</span>
+    </div>
+    {% else %}
+    <div class="empty">Событий пока нет.</div>
     {% endfor %}
-  </table>
-  {% else %}<p class="muted">Пока не приходили. Прогоните отправку из «Шлюза» —
-    строка появится здесь.</p>{% endif %}
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Связь с Doc-V</span>
+        <span class="card-note">опрос каждые 30 секунд</span>
+      </div>
+      {% for b in beats %}
+      <div class="feed-row">
+        <span class="name">{{ b.label }}</span>
+        <span class="mono muted">{{ b.clock }}</span>
+        <span class="status-item" style="color:var({{ '--brand-ink' if b.dot == '' else '--amber-800' }})">
+          <span class="dot {{ b.dot }}"></span>{{ b.text }}</span>
+      </div>
+      {% endfor %}
+      <div class="card-body card-note">Если «Опрос очереди» молчит дольше 90 секунд, планировщик задач на сервере Doc-V остановлен. Планировщик не попадает в экспорт конфигурации, поэтому следить за ним можно только здесь.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">Справочники из Doc-V</span>
+        <span class="card-note">расшифровка UID</span>
+      </div>
+      {% for d in directories %}
+      <div class="feed-row">
+        <span class="name mono">{{ d.name }}</span>
+        <span class="chip neutral">{{ d.count }}</span>
+        <span class="mono muted">{{ d.updated_at }}</span>
+      </div>
+      {% else %}
+      <div class="empty">Пока не приходили. Прогоните отправку из «Шлюза».</div>
+      {% endfor %}
+    </div>
+  </div>
 </div>
+
 {% if not typst or not libreoffice %}
 <div class="card">
-  <h2 style="margin-top:0">PATH процесса</h2>
-  <p class="muted">Программа ищется в этом PATH и в типичных каталогах
-    (~/.cargo/bin, /usr/local/bin, /usr/bin, /opt/typst, /snap/bin).
-    Если бинарь лежит в другом месте, укажите его в GW_TYPST_BIN.</p>
-  <pre class="out">{{ path_env }}</pre>
+  <div class="card-head"><span class="card-title">PATH процесса</span>
+    <span class="card-note">программа ищется здесь и в типичных каталогах</span></div>
+  <div class="card-body"><pre class="out">{{ path_env }}</pre></div>
 </div>
 {% endif %}
-<div class="card">
-  <h2 style="margin-top:0">Последние события (audit)</h2>
-  {% if events %}
-  <table>
-    <tr><th>Время</th><th>Событие</th><th>Детали</th></tr>
-    {% for e in events %}
-    <tr>
-      <td class="mono muted">{{ e.ts }}</td>
-      <td>{{ e.message }}</td>
-      <td class="mono">{{ e.details }}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% else %}<p class="muted">Событий пока нет.</p>{% endif %}
-</div>
 {% endblock %}

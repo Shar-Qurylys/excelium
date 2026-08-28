@@ -1,50 +1,72 @@
 {% extends "base.html" %}
-{% block title %}Задания — Doc-V Gateway{% endblock %}
+{% block title %}Очередь заданий — Doc-V Gateway{% endblock %}
 {% block content %}
-<h1>Очередь заданий</h1>
-<div class="card">
-  <form method="get" action="/ui/jobs">
-    <label>Статус
-      <select name="status" onchange="this.form.submit()">
-        <option value="">все</option>
-        {% for s in ('pending', 'leased', 'acked') %}
-        <option value="{{ s }}" {{ 'selected' if s == status_filter else '' }}>{{ s }}</option>
-        {% endfor %}
-      </select>
-    </label>
+<div class="page-head">
+  <div>
+    <h1>Очередь заданий</h1>
+    <span class="sub"><span class="dot sm live"></span> Doc-V забирает задания опросом каждые 30 секунд</span>
+  </div>
+  <div class="head-actions">
+    <a class="btn ghost" href="/ui/jobs">Обновить</a>
+  </div>
+</div>
+
+<div class="filters">
+  <form method="get" action="/ui/jobs" style="display:flex;gap:10px;align-items:center">
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Все статусы</option>
+      {% for value, title in (('pending','В очереди'), ('leased','Выданы Doc-V'), ('acked','Подтверждены')) %}
+      <option value="{{ value }}" {{ 'selected' if value == status_filter }}>{{ title }}</option>
+      {% endfor %}
+    </select>
   </form>
+  <span class="chip neutral">всего: {{ rows|length }}</span>
+  {% if status_filter %}<a class="muted" style="font-size:13px" href="/ui/jobs">Сбросить</a>{% endif %}
+</div>
+
+<div class="card">
   {% if rows %}
   <table>
-    <tr><th>ID</th><th>Продюсер</th><th>Тип</th><th>Статус</th><th>Попыток</th>
-        <th>Создано</th><th>Аренда до</th><th>Подтверждено</th><th></th></tr>
+    <thead><tr>
+      <th>ID</th><th>Продюсер</th><th>Тип</th><th>Статус</th>
+      <th class="num">Попыток</th><th>Создано</th><th>Аренда до</th><th></th>
+    </tr></thead>
+    <tbody>
     {% for j in rows %}
     <tr>
       <td class="mono">{{ j.id }}</td>
       <td>{{ j.producer }}</td>
-      <td>{{ j.type }}</td>
-      <td><span class="badge {{ j.status }}">{{ j.status }}</span></td>
-      <td>{{ j.attempts }}</td>
+      <td class="strong">{{ j.type }}</td>
+      <td><span class="chip {{ j.status }}">{{ status_titles.get(j.status, j.status) }}</span></td>
+      <td class="num">{{ j.attempts }}</td>
       <td class="mono muted">{{ j.created_at }}</td>
-      <td class="mono muted">{{ j.leased_until or "" }}</td>
-      <td class="mono muted">{{ j.acked_at or "" }}</td>
-      <td>{% if j.status != 'acked' %}
+      <td class="mono muted">{{ j.leased_until or "—" }}</td>
+      <td><div class="actions">
+        {% if j.status != 'acked' %}
         <form class="inline" method="post" action="/ui/jobs/ack/{{ j.id }}">
-          <button class="small">подтвердить</button></form>{% endif %}</td>
+          <button class="btn ghost sm">подтвердить</button></form>
+        {% endif %}
+      </div></td>
     </tr>
     {% endfor %}
+    </tbody>
   </table>
-  {% else %}<p class="muted">Заданий нет.</p>{% endif %}
+  {% else %}<div class="empty">Заданий нет.</div>{% endif %}
 </div>
+
 <div class="card">
-  <h2 style="margin-top:0">Тестовое задание</h2>
-  <p class="muted">Кладёт задание в очередь от имени продюсера «ui» — точка
-    «Опрос» в Doc-V заберёт его при следующем срабатывании.</p>
-  <form method="post" action="/ui/jobs/new">
-    <label>Тип задания</label>
-    <input type="text" name="type" value="тест">
-    <label>Payload (JSON)</label>
-    <textarea name="payload" rows="4">{"пример": true}</textarea>
-    <button>Поставить в очередь</button>
-  </form>
+  <div class="card-head">
+    <span class="card-title">Тестовое задание</span>
+    <span class="card-note">попадёт в очередь от продюсера «ui»</span>
+  </div>
+  <div class="card-body">
+    <form method="post" action="/ui/jobs/new">
+      <label>Тип задания</label>
+      <input type="text" name="type" value="тест" style="max-width:420px">
+      <label>Payload (JSON)</label>
+      <textarea name="payload" rows="4">{"пример": true}</textarea>
+      <button class="btn" style="margin-top:14px">Поставить в очередь</button>
+    </form>
+  </div>
 </div>
 {% endblock %}

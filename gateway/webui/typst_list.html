@@ -1,57 +1,74 @@
 {% extends "base.html" %}
-{% block title %}Шаблоны — Doc-V Gateway{% endblock %}
+{% block title %}Шаблоны Typst — Doc-V Gateway{% endblock %}
 {% block content %}
-<h1>Шаблоны Typst</h1>
-<div class="grid2">
-<div class="card">
-  <h2 style="margin-top:0">Шаблоны</h2>
-  <p class="muted">Каждый шаблон — адрес <span class="mono">POST /render/typst/&lt;имя&gt;</span>.
-    Данные приходят JSON-ом и читаются в шаблоне через
-    <span class="mono">json(sys.inputs.data)</span>.</p>
-  {% if rows %}
-  <table>
-    <tr><th>Имя</th><th>Размер</th><th>Изменён</th></tr>
-    {% for t in rows %}
-    <tr>
-      <td><a href="/ui/typst/{{ t.name }}">{{ t.name }}</a></td>
-      <td>{{ t.size }} зн.</td>
-      <td class="mono muted">{{ t.updated_at }}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% else %}<p class="muted">Шаблонов нет.</p>{% endif %}
-  <form method="post" action="/ui/typst/create">
-    <label>Новый шаблон <span class="hint">[a-z0-9_-]</span></label>
-    <input type="text" name="name" placeholder="doverennost">
-    <button>Создать</button>
-  </form>
+<div class="page-head">
+  <div>
+    <h1>Шаблоны Typst</h1>
+    <span class="sub">каждый шаблон — адрес <span class="mono">POST /render/typst/&lt;имя&gt;</span></span>
+  </div>
+  <div class="head-actions">
+    <form method="post" action="/ui/typst/create" style="display:flex;gap:8px;align-items:center">
+      <input type="text" name="name" placeholder="имя нового шаблона" style="width:230px">
+      <button class="btn">Создать</button>
+    </form>
+  </div>
 </div>
-<div class="card">
-  <h2 style="margin-top:0">Картинки</h2>
-  <p class="muted">Общий набор для всех шаблонов; в шаблоне —
-    <span class="mono">#image("assets/имя.png")</span>. До 5 МБ,
-    png/jpg/gif/svg.</p>
-  {% if assets %}
-  <table>
-    <tr><th></th><th>Имя</th><th>Размер</th><th>Загружена</th><th></th></tr>
-    {% for a in assets %}
-    <tr>
-      <td><img src="/ui/typst/assets/raw/{{ a.name }}" alt=""
-        style="height:44px;max-width:90px;object-fit:contain;border:1px solid var(--line);border-radius:4px;background:#fff"></td>
-      <td class="mono">assets/{{ a.name }}</td>
-      <td>{{ "%.1f"|format(a.size / 1024) }} КБ</td>
-      <td class="mono muted">{{ a.updated_at }}</td>
-      <td><form class="inline" method="post" action="/ui/typst/assets/delete/{{ a.name }}">
-        <button class="small danger">удалить</button></form></td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% endif %}
-  <form method="post" action="/ui/typst/assets/upload" enctype="multipart/form-data">
-    <label>Загрузить картинки <span class="hint">— можно несколько сразу</span></label>
-    <input type="file" name="uploads" multiple accept=".png,.jpg,.jpeg,.gif,.svg">
-    <button>Загрузить</button>
-  </form>
-</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Шаблоны</span>
+      <span class="card-note">данные приходят JSON-ом и читаются как <span class="mono">json(sys.inputs.data)</span></span>
+    </div>
+    {% if rows %}
+    <table>
+      <thead><tr><th>Имя</th><th class="num">Размер</th><th>Изменён</th></tr></thead>
+      <tbody>
+      {% for t in rows %}
+      <tr>
+        <td><a class="strong" href="/ui/typst/{{ t.name }}">{{ t.name }}</a></td>
+        <td class="num mono">{{ t.size }}</td>
+        <td class="mono muted">{{ t.updated_at }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">Шаблонов нет.</div>{% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Картинки</span>
+      <span class="card-note">до 5 МБ</span>
+    </div>
+    {% if assets %}
+    <table>
+      <thead><tr><th style="width:100px"></th><th>Имя</th><th class="num">Размер</th><th></th></tr></thead>
+      <tbody>
+      {% for a in assets %}
+      <tr>
+        <td><img class="thumb" src="/ui/typst/assets/raw/{{ a.name }}" alt=""></td>
+        <td class="mono">assets/{{ a.name }}</td>
+        <td class="num mono">{{ "%.1f"|format(a.size / 1024) }} КБ</td>
+        <td><div class="actions">
+          <form class="inline" method="post" action="/ui/typst/assets/delete/{{ a.name }}">
+            <button class="btn danger sm">удалить</button></form>
+        </div></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    <div class="card-body">
+      <form method="post" action="/ui/typst/assets/upload" enctype="multipart/form-data"
+            style="display:flex;gap:8px;align-items:center">
+        <input type="file" name="uploads" multiple accept=".png,.jpg,.jpeg,.gif,.svg">
+        <button class="btn ghost">Загрузить</button>
+      </form>
+      <div class="card-note" style="margin-top:10px">В шаблоне подключаются как
+        <span class="mono">#image("assets/имя.png")</span>; фирменные бланки — через
+        <span class="mono">organization.blank_filepath</span>.</div>
+    </div>
+  </div>
 </div>
 {% endblock %}

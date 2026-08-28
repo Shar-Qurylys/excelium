@@ -87,7 +87,7 @@ def test_render_registry_via_ui(client):
     r = client.post("/ui/render/registry",
                     data={"kind": "inner", "data": json.dumps(MODEL, ensure_ascii=False)},
                     follow_redirects=True)
-    assert r.status_code == 200 and "скачать" in r.text
+    assert r.status_code == 200 and "Скачать" in r.text  # кнопка со ссылкой на файл
     files = client.app.state.filestore.list_files()
     assert files and files[0]["suffix"] == ".xlsx"
 
@@ -216,5 +216,4 @@ def test_dashboard_shows_directories(client):
         {"uid": "u1", "display_name": "Абдрахманова Х.М.", "position": "Гл. бухгалтер",
          "department": "Бухгалтерия"}])
     r = client.get("/ui")
-    assert "structura" in r.text and ">1<" in r.text
-    assert "department, display_name, name, position" in r.text
+    assert "structura" in r.text and ">1<" in r.text  # имя и число записей на карточке

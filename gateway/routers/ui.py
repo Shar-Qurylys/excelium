@@ -9,8 +9,7 @@ import json
 import logging
 import os
 import shutil
-from datetime import date
-
+from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Form, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -30,8 +29,39 @@ from .render import _deliver, _sorted
 log = logging.getLogger(__name__)
 router = APIRouter()
 templates = Jinja2Templates(directory=APP_DIR / "gateway" / "webui")
+# Стили встраиваются в страницу: отдельный статический файл не годится —
+# страница входа отдаётся до проверки cookie, и запрос за CSS получил бы отказ.
+DS_CSS = (APP_DIR / "gateway" / "webui" / "ds.css").read_text(encoding="utf-8")
+templates.env.globals["ds_css"] = DS_CSS
 
 AUDIT_TAIL = 50
+ALMATY = timezone(timedelta(hours=5))
+EVENT_TITLES = {
+    "deny_ip": "Отклонён запрос с чужого адреса",
+    "deny_token": "Отклонён запрос с неверным токеном",
+    "deny_ui": "Отклонён вход в панель",
+    "rate_limited": "Запрос отклонён по лимиту частоты",
+    "ui_login": "Вход в панель",
+    "ui_login_failed": "Неверный админ-токен",
+    "job_enqueued": "Задание поставлено в очередь",
+    "jobs_acked": "Doc-V подтвердил задания",
+    "job_many_attempts": "Задание выдаётся слишком часто",
+    "ops_start": "Запущена операция",
+    "ops_finish": "Операция завершена",
+    "directory_replaced": "Обновлён справочник из Doc-V",
+    "typst_template_saved": "Сохранён шаблон Typst",
+    "typst_template_restored": "Возвращена версия шаблона",
+    "typst_template_deleted": "Удалён шаблон Typst",
+    "typst_asset_uploaded": "Загружена картинка",
+    "typst_asset_deleted": "Удалена картинка",
+    "file_to_assets": "Файл перенесён в картинки",
+    "ui_file_uploaded": "Загружен файл",
+    "ui_file_renamed": "Файл переименован",
+    "ui_file_deleted": "Файл удалён",
+    "ui_files_zip": "Файлы скачаны архивом",
+    "ui_job_ack": "Задание подтверждено вручную",
+    "ui_job_enqueued": "Создано тестовое задание",
+}
 SAMPLE = json.dumps({"request": [{
     "registry_name": "РЕЕСТР ПЛАТЕЖЕЙ №1", "organization": "ТОО «Шар-Кұрылыс»",
     "object_name": "Администрация", "counteragent": "ТОО «Пример»",
@@ -84,7 +114,9 @@ def logout():
 def dashboard(request: Request):
     state = request.app.state
     files = state.filestore.list_files()
-    events = []
+
+    # лента: audit-лог, свежие сверху; вид точки — по характеру события
+    events, denies = [], 0
     audit_path = state.settings.var_dir / "audit.log"
     if audit_path.is_file():
         for line in audit_path.read_text(encoding="utf-8").splitlines()[-AUDIT_TAIL:][::-1]:
@@ -92,23 +124,38 @@ def dashboard(request: Request):
                 e = json.loads(line)
             except ValueError:
                 continue
+            message = e.get("message", "")
             details = {k: v for k, v in e.items()
                        if k not in ("ts", "level", "logger", "message")}
-            events.append({"ts": e.get("ts", ""), "message": e.get("message", ""),
-                           "details": json.dumps(details, ensure_ascii=False)})
+            dot = ""
+            if message.startswith("deny") or message == "rate_limited":
+                dot, denies = "danger", denies + 1
+            elif message.endswith("_failed") or details.get("ok") is False:
+                dot = "warn"
+            elif message.startswith("ui_") or message.startswith("job"):
+                dot = "off" if message.startswith("ui_") else ""
+            events.append({
+                "time": e.get("ts", "")[11:19],
+                "dot": dot,
+                "text": EVENT_TITLES.get(message, message) + (
+                    " · " + json.dumps(details, ensure_ascii=False) if details else ""),
+            })
+
     beats = []
     for kind, info in state.heartbeat.snapshot().items():
         age = info["age_sec"]
         if age is None:
-            status, text = "none", "ещё не было"
+            dot, text = "off", "ещё не было"
         elif age < 120:
-            status, text = "ok", f"{age} с назад"
+            dot, text = "", f"{age} с назад"
         elif age < 3600:
-            status, text = "warn", f"{age // 60} мин назад"
+            dot, text = "warn", f"{age // 60} мин назад"
         else:
-            status, text = "warn", f"{age // 3600} ч назад"
-        beats.append({"kind": kind, "label": info["label"], "status": status,
-                      "text": text, "seen_at": info["seen_at"] or ""})
+            dot, text = "warn", f"{age // 3600} ч назад"
+        beats.append({"kind": kind, "label": info["label"], "dot": dot, "text": text,
+                      "clock": (info["seen_at"] or "")[11:19] or "—"})
+
+    now = datetime.now(ALMATY)
     return _page(request, "dashboard.html", "dash", beats=beats,
                  directories=state.directory.info(),
                  typst=typst_available(), typst_path=typst_binary(),
@@ -117,16 +164,27 @@ def dashboard(request: Request):
                  path_env=os.environ.get("PATH", ""),
                  files_count=len(files),
                  files_mb=round(sum(f["size"] for f in files) / 1024 / 1024, 1),
-                 jobs=state.jobs.stats(), events=events)
+                 templates_count=len(state.typst_store.list_templates()),
+                 ops_count=len(state.ops), denies=denies,
+                 jobs=state.jobs.stats(), events=events,
+                 health_title=("Шлюз в работе, все каналы на связи"
+                               if all(b["dot"] == "" for b in beats) or not beats
+                               else "Шлюз в работе, есть молчащие каналы"),
+                 now_line="обновлено только что",
+                 today_line=now.strftime("%d.%m.%Y, %H:%M по Астане"))
 
 
 # --- задания --------------------------------------------------------------
 
+JOB_STATUS_TITLES = {"pending": "в очереди", "leased": "выдано Doc-V",
+                     "acked": "подтверждено"}
+
+
 @router.get("/ui/jobs")
 def jobs_page(request: Request, status: str = "", flash: str = ""):
     rows = request.app.state.jobs.list_jobs(status=status or None)
-    return _page(request, "jobs.html", "jobs", rows=rows,
-                 status_filter=status, flash=flash)
+    return _page(request, "jobs.html", "jobs", rows=rows, status_filter=status,
+                 status_titles=JOB_STATUS_TITLES, flash=flash)
 
 
 @router.post("/ui/jobs/ack/{job_id}")
@@ -145,6 +203,7 @@ def jobs_new(request: Request, type: str = Form(...), payload: str = Form(...)):
     except ValueError:
         rows = request.app.state.jobs.list_jobs()
         return _page(request, "jobs.html", "jobs", rows=rows, status_filter="",
+                     status_titles=JOB_STATUS_TITLES,
                      flash="Payload — не JSON-объект", flash_err=True)
     job_id, _ = request.app.state.jobs.enqueue(
         producer="ui", job_type=type.strip() or "тест", payload=data,

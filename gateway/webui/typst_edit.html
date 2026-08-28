@@ -1,62 +1,85 @@
 {% extends "base.html" %}
 {% block title %}{{ name }} — шаблон Typst{% endblock %}
 {% block content %}
-<h1><a href="/ui/typst" class="muted" style="text-decoration:none">Шаблоны /</a> {{ name }}</h1>
-{% if link %}<div class="flash">Готово: <a href="{{ link }}">скачать PDF</a></div>{% endif %}
-<div class="card">
-  <form method="post" action="/ui/typst/{{ name }}/save">
-    <label>Текст шаблона</label>
-    <textarea name="source" rows="22" spellcheck="false">{{ source }}</textarea>
-    <button>Сохранить</button>
-    <span class="muted" style="margin-left:12px">Прежняя версия уйдёт в историю
-      (хранится {{ history_keep }})</span>
-  </form>
+<div class="page-head">
+  <div>
+    <h1>{{ name }}</h1>
+    <span class="sub"><a href="/ui/typst">Шаблоны</a> · <span class="mono">POST /render/typst/{{ name }}</span></span>
+  </div>
+  <div class="head-actions">
+    {% if link %}<a class="btn" href="{{ link }}">Скачать PDF</a>{% endif %}
+    <form class="inline" method="post" action="/ui/typst/{{ name }}/delete"
+          onsubmit="return confirm('Удалить шаблон {{ name }}?')">
+      <button class="btn danger">Удалить</button></form>
+  </div>
 </div>
-<div class="grid2">
+
 <div class="card">
-  <h2 style="margin-top:0">Пробный рендер</h2>
-  <form method="post" action="/ui/typst/{{ name }}/test">
-    <label>Данные (JSON)</label>
-    <textarea name="data" rows="7">{{ test_data }}</textarea>
-    <button {{ 'disabled' if not typst else '' }}>Собрать PDF</button>
-    {% if not typst %}<span class="muted" style="margin-left:12px">typst не найден</span>{% endif %}
-  </form>
-  {% if error %}<pre class="out">{{ error }}</pre>{% endif %}
+  <div class="card-head">
+    <span class="card-title">Текст шаблона</span>
+    <span class="card-note">прежняя версия уходит в историю, хранится {{ history_keep }}</span>
+  </div>
+  <div class="card-body">
+    <form method="post" action="/ui/typst/{{ name }}/save">
+      <textarea name="source" rows="24" spellcheck="false">{{ source }}</textarea>
+      <button class="btn" style="margin-top:14px">Сохранить</button>
+    </form>
+  </div>
 </div>
-<div class="card">
-  <h2 style="margin-top:0">Доступные картинки</h2>
-  {% if assets %}
-  <table>
-    {% for a in assets %}
-    <tr>
-      <td><img src="/ui/typst/assets/raw/{{ a.name }}" alt=""
-        style="height:40px;max-width:80px;object-fit:contain;border:1px solid var(--line);border-radius:4px;background:#fff"></td>
-      <td class="mono" style="font-size:12px">#image("assets/{{ a.name }}")</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% else %}<p class="muted">Картинок нет — загрузите на странице
-    «Шаблоны» или перенесите из «Файлов».</p>{% endif %}
-</div>
-<div class="card">
-  <h2 style="margin-top:0">История</h2>
-  {% if history %}
-  <table>
-    <tr><th>Сохранена</th><th>Размер</th><th></th></tr>
-    {% for h in history %}
-    <tr>
-      <td class="mono muted">{{ h.saved_at }}</td>
-      <td>{{ h.size }} зн.</td>
-      <td><form class="inline" method="post" action="/ui/typst/{{ name }}/restore/{{ h.id }}">
-        <button class="small">вернуть</button></form></td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% else %}<p class="muted">Правок ещё не было.</p>{% endif %}
-  <form method="post" action="/ui/typst/{{ name }}/delete"
-        onsubmit="return confirm('Удалить шаблон {{ name }}?')">
-    <button class="danger">Удалить шаблон</button>
-  </form>
-</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Пробный рендер</span>
+      {% if not typst %}<span class="chip warn">typst не найден</span>{% endif %}
+    </div>
+    <div class="card-body">
+      <form method="post" action="/ui/typst/{{ name }}/test">
+        <textarea name="data" rows="8">{{ test_data }}</textarea>
+        <button class="btn" style="margin-top:14px" {{ 'disabled' if not typst }}>Собрать PDF</button>
+      </form>
+      {% if error %}<pre class="out" style="margin-top:12px">{{ error }}</pre>{% endif %}
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Доступные картинки</span></div>
+      {% if assets %}
+      <table>
+        <tbody>
+        {% for a in assets %}
+        <tr>
+          <td style="width:100px"><img class="thumb" src="/ui/typst/assets/raw/{{ a.name }}" alt=""></td>
+          <td class="mono" style="font-size:12px">#image("assets/{{ a.name }}")</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<div class="empty">Картинок нет — загрузите на странице «Шаблоны».</div>{% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="card-title">История</span>
+        <span class="card-note">{{ history|length }} версий</span></div>
+      {% if history %}
+      <table>
+        <thead><tr><th>Сохранена</th><th class="num">Размер</th><th></th></tr></thead>
+        <tbody>
+        {% for h in history %}
+        <tr>
+          <td class="mono muted">{{ h.saved_at }}</td>
+          <td class="num mono">{{ h.size }}</td>
+          <td><div class="actions">
+            <form class="inline" method="post" action="/ui/typst/{{ name }}/restore/{{ h.id }}">
+              <button class="btn ghost sm">вернуть</button></form>
+          </div></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<div class="empty">Правок ещё не было.</div>{% endif %}
+    </div>
+  </div>
 </div>
 {% endblock %}

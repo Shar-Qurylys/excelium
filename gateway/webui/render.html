@@ -1,44 +1,53 @@
 {% extends "base.html" %}
 {% block title %}Рендер — Doc-V Gateway{% endblock %}
 {% block content %}
-<h1>Рендер</h1>
-{% if link %}
-<div class="flash">Готово: <a href="{{ link }}">скачать {{ link_name }}</a></div>
-{% endif %}
-<div class="grid2">
-<div class="card">
-  <h2 style="margin-top:0">Реестр из JSON</h2>
-  <p class="muted">Тот же формат, что шлёт Doc-V: объект с ключом
-    <span class="mono">request</span>.</p>
-  <form method="post" action="/ui/render/registry">
-    <label>Вид реестра</label>
-    <select name="kind">
-      <option value="inner">внутренний</option>
-      <option value="outer">внешний</option>
-      <option value="priority">предстоящих платежей</option>
-    </select>
-    <label>JSON</label>
-    <textarea name="data" rows="12">{{ sample }}</textarea>
-    <button>Собрать</button>
-  </form>
+<div class="page-head">
+  <div>
+    <h1>Рендер</h1>
+    <span class="sub">собрать документ из JSON — тем же путём, каким это делает Doc-V</span>
+  </div>
+  {% if link %}<div class="head-actions"><a class="btn" href="{{ link }}">Скачать {{ link_name }}</a></div>{% endif %}
 </div>
-<div class="card">
-  <h2 style="margin-top:0">Typst → PDF</h2>
-  <p class="muted">Шаблоны — templates/typst/. Новый файл там появится
-    здесь сам.</p>
-  {% if typst_templates %}
-  <form method="post" action="/ui/render/typst">
-    <label>Шаблон</label>
-    <select name="template">
-      {% for t in typst_templates %}<option>{{ t }}</option>{% endfor %}
-    </select>
-    <label>Данные (JSON)</label>
-    <textarea name="data" rows="8">{"title": "Справка", "fields": {"Поле": "Значение"}}</textarea>
-    <button {{ 'disabled' if not typst else '' }}>Собрать PDF</button>
-    {% if not typst %}<p class="muted">Бинарь typst не найден — установка описана
-      в deploy/README-deploy.md.</p>{% endif %}
-  </form>
-  {% else %}<p class="muted">Шаблонов нет.</p>{% endif %}
-</div>
+
+<div class="grid-half">
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Реестр из JSON</span>
+      <span class="card-note">объект с ключом <span class="mono">request</span></span>
+    </div>
+    <div class="card-body">
+      <form method="post" action="/ui/render/registry">
+        <label>Вид реестра</label>
+        <select name="kind">
+          <option value="inner">внутренний</option>
+          <option value="outer">внешний</option>
+          <option value="priority">предстоящих платежей</option>
+        </select>
+        <label>JSON</label>
+        <textarea name="data" rows="14">{{ sample }}</textarea>
+        <button class="btn" style="margin-top:14px">Собрать</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">Typst → PDF</span>
+      {% if not typst %}<span class="chip warn">typst не найден</span>{% endif %}
+    </div>
+    <div class="card-body">
+      {% if typst_templates %}
+      <form method="post" action="/ui/render/typst">
+        <label>Шаблон</label>
+        <select name="template">
+          {% for t in typst_templates %}<option>{{ t }}</option>{% endfor %}
+        </select>
+        <label>Данные (JSON)</label>
+        <textarea name="data" rows="10">{"title": "Справка", "fields": {"Поле": "Значение"}}</textarea>
+        <button class="btn" style="margin-top:14px" {{ 'disabled' if not typst }}>Собрать PDF</button>
+      </form>
+      {% else %}<div class="muted">Шаблонов нет — создайте на странице «Шаблоны».</div>{% endif %}
+    </div>
+  </div>
 </div>
 {% endblock %}

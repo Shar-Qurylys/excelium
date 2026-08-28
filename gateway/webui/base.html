@@ -4,81 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Doc-V Gateway{% endblock %}</title>
-<style>
-:root {
-  --bg: #f5f6f8; --card: #ffffff; --ink: #1c2430; --muted: #68717d;
-  --line: #dde1e6; --accent: #1f6feb; --ok: #1a7f37; --warn: #b35900; --err: #b42318;
-}
-* { box-sizing: border-box; }
-body { margin: 0; font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-       background: var(--bg); color: var(--ink); }
-header { background: #1c2430; color: #fff; padding: 0 24px; display: flex;
-         align-items: center; gap: 24px; }
-header .brand { font-weight: 700; padding: 14px 0; }
-header nav { display: flex; gap: 4px; flex-wrap: wrap; }
-header nav a { color: #c7cdd6; text-decoration: none; padding: 14px 12px; }
-header nav a:hover { color: #fff; }
-header nav a.active { color: #fff; box-shadow: inset 0 -3px 0 var(--accent); }
-header .out { margin-left: auto; }
-main { max-width: 1100px; margin: 24px auto; padding: 0 24px; }
-h1 { font-size: 20px; margin: 0 0 16px; }
-h2 { font-size: 16px; margin: 24px 0 8px; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
-        padding: 16px 20px; margin-bottom: 16px; }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-         gap: 12px; margin-bottom: 16px; }
-.stat { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
-        padding: 12px 16px; }
-.stat .label { color: var(--muted); font-size: 13px; }
-.stat .value { font-size: 22px; font-weight: 700; }
-table { border-collapse: collapse; width: 100%; font-size: 14px; }
-th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line);
-         vertical-align: top; }
-th { color: var(--muted); font-weight: 600; white-space: nowrap; }
-.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; }
-.badge.pending { background: #fff3cd; color: var(--warn); }
-.badge.leased { background: #d8e6fd; color: var(--accent); }
-.badge.acked { background: #d9efdf; color: var(--ok); }
-.badge.ok { background: #d9efdf; color: var(--ok); }
-.badge.fail { background: #fbe3e0; color: var(--err); }
-.muted { color: var(--muted); }
-.mono { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 13px; }
-input[type=text], input[type=password], select, textarea {
-  width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px;
-  font: inherit; background: #fff; }
-textarea { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
-label { display: block; margin: 10px 0 4px; font-weight: 600; font-size: 14px; }
-label .hint { font-weight: 400; color: var(--muted); }
-button, .btn { background: var(--accent); border: 0; color: #fff; padding: 8px 16px;
-  border-radius: 6px; font: inherit; cursor: pointer; text-decoration: none;
-  display: inline-block; margin-top: 12px; }
-button.small { padding: 3px 10px; font-size: 13px; margin: 0; }
-button.danger { background: var(--err); }
-pre.out { background: #10151c; color: #d6dde6; padding: 12px 14px; border-radius: 6px;
-          overflow-x: auto; font-size: 13px; }
-.flash { border-left: 4px solid var(--accent); background: #eaf1fd; padding: 10px 14px;
-         border-radius: 4px; margin-bottom: 16px; }
-.flash.err { border-color: var(--err); background: #fbe3e0; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
-form.inline { display: inline; }
-</style>
+<style>{{ ds_css }}</style>
 </head>
 <body>
-<header>
-  <span class="brand">Doc-V Gateway</span>
-  <nav>
-    <a href="/ui" class="{{ 'active' if page == 'dash' else '' }}">Обзор</a>
-    <a href="/ui/jobs" class="{{ 'active' if page == 'jobs' else '' }}">Задания</a>
-    <a href="/ui/ops" class="{{ 'active' if page == 'ops' else '' }}">Операции</a>
-    <a href="/ui/files" class="{{ 'active' if page == 'files' else '' }}">Файлы</a>
-    <a href="/ui/render" class="{{ 'active' if page == 'render' else '' }}">Рендер</a>
-    <a href="/ui/typst" class="{{ 'active' if page == 'typst' else '' }}">Шаблоны</a>
-  </nav>
-  <nav class="out"><a href="/ui/logout">Выйти</a></nav>
+<header class="gw-header">
+  <div class="left">
+    <a class="wordmark" href="/ui"><span aria-hidden="true">◢</span>DOC-V GATEWAY</a>
+    <nav class="gw-nav">
+      <a href="/ui" class="{{ 'active' if page == 'dash' }}">Обзор</a>
+      <a href="/ui/jobs" class="{{ 'active' if page == 'jobs' }}">Задания</a>
+      <a href="/ui/ops" class="{{ 'active' if page == 'ops' }}">Операции</a>
+      <a href="/ui/files" class="{{ 'active' if page == 'files' }}">Файлы</a>
+      <a href="/ui/typst" class="{{ 'active' if page == 'typst' }}">Шаблоны</a>
+      <a href="/ui/render" class="{{ 'active' if page == 'render' }}">Рендер</a>
+    </nav>
+  </div>
+  <div class="right">
+    <span class="online"><span class="dot sm live"></span>онлайн</span>
+    <span class="user-chip">Администратор</span>
+    <a href="/ui/logout" class="muted" style="font-size:12px">Выйти</a>
+  </div>
 </header>
 <main>
-{% if flash %}<div class="flash {{ 'err' if flash_err else '' }}">{{ flash }}</div>{% endif %}
+{% if flash %}<div class="flash {{ 'err' if flash_err }}">{{ flash }}</div>{% endif %}
 {% block content %}{% endblock %}
 </main>
 </body>
