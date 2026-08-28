@@ -15,6 +15,9 @@ from pathlib import Path
 import yaml
 
 BUILTINS = {"workdir", "app_dir", "python"}
+# Команду можно задавать из интерфейса, поэтому argv[0] ограничен каталогами:
+# конструктор операций иначе превратил бы админ-токен в доступ к оболочке.
+ALLOWED_BIN_DIRS = ("/usr/bin", "/bin", "/usr/local/bin", "/opt")
 PLACEHOLDER_RE = re.compile(r"\{([a-z_]+)(\.\.\.)?\}")
 PARAM_TYPES = {"str", "file", "file_list"}
 
@@ -66,6 +69,11 @@ def _parse_operation(name: str, spec: dict) -> Operation:
     argv = spec.get("argv")
     if not isinstance(argv, list) or not argv or not all(isinstance(a, str) for a in argv):
         fail("argv — непустой список строк")
+    head = argv[0]
+    if not (head.startswith("{python}") or head.startswith("{app_dir}")
+            or any(head.startswith(d + "/") for d in ALLOWED_BIN_DIRS)):
+        fail(f"argv[0] должен быть {{python}}, {{app_dir}}/… или лежать в "
+             f"{', '.join(ALLOWED_BIN_DIRS)}; получено {head!r}")
 
     params: dict[str, ParamDef] = {}
     for pname, pspec in (spec.get("params") or {}).items():
@@ -113,3 +121,56 @@ def _parse_operation(name: str, spec: dict) -> Operation:
         max_output_kb=int(spec.get("max_output_kb", 64)),
         description=str(spec.get("description", "")),
     )
+
+
+def dump_registry(registry: dict[str, Operation]) -> str:
+    """Реестр -> текст ops.yaml (шапка-пояснение сохраняется)."""
+    ops: dict = {}
+    for name, op in sorted(registry.items()):
+        spec: dict = {}
+        if op.description:
+            spec["description"] = op.description
+        spec["argv"] = list(op.argv)
+        if op.params:
+            spec["params"] = {}
+            for pname, p in op.params.items():
+                entry: dict = {}
+                if p.type != "str":
+                    entry["type"] = p.type
+                if p.pattern is not None:
+                    entry["pattern"] = p.pattern.pattern
+                if not p.required:
+                    entry["required"] = False
+                if p.type == "file_list" and p.max_items != 50:
+                    entry["max_items"] = p.max_items
+                spec["params"][pname] = entry
+        if op.collect:
+            spec["collect"] = op.collect
+        if op.timeout_sec != 30:
+            spec["timeout_sec"] = op.timeout_sec
+        if op.max_output_kb != 64:
+            spec["max_output_kb"] = op.max_output_kb
+        ops[name] = spec
+    return HEADER + yaml.safe_dump({"operations": ops}, allow_unicode=True,
+                                   sort_keys=False, width=100)
+
+
+def parse_operation(name: str, spec: dict) -> Operation:
+    """Проверка одной операции (для конструктора в интерфейсе)."""
+    return _parse_operation(name, spec)
+
+
+HEADER = """# Реестр операций шлюза — замена платного действия «Запуск».
+#
+# Каждая операция — фиксированный argv-шаблон. Shell не используется
+# никогда; значения параметров валидируются regex-ом и попадают в
+# команду только отдельным аргументом. Файловые параметры принимают
+# токен из /files и копируются во временную папку под человеческим
+# именем; файлы, попавшие под collect, возвращаются ссылками в ответе.
+#
+# Встроенные плейсхолдеры: {workdir} — временная папка запуска,
+# {app_dir} — корень сервиса, {python} — python из venv сервиса.
+#
+# Файл правится и руками, и через конструктор в /ui («Операции»).
+
+"""

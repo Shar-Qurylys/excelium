@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}{{ name or "Новая операция" }} — Doc-V Gateway{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ name or "Новая операция" }}</h1>
+    <span class="sub"><a href="/ui/ops">Операции</a> · правится без перезапуска юнита</span>
+  </div>
+  {% if name %}
+  <div class="head-actions">
+    <form class="inline" method="post" action="/ui/opsedit/delete/{{ name }}"
+          onsubmit="return confirm('Удалить операцию {{ name }}?')">
+      <button class="btn danger">Удалить</button></form>
+  </div>
+  {% endif %}
+</div>
+
+<form method="post" action="/ui/opsedit/save">
+<input type="hidden" name="old_name" value="{{ name }}">
+<div class="grid-2">
+  <div class="card">
+    <div class="card-head"><span class="card-title">Команда</span>
+      <span class="card-note">shell не используется — каждый аргумент отдельной строкой</span></div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:1fr 140px;gap:12px">
+        <div>
+          <label>Название <span class="hint">[a-z0-9_]</span></label>
+          <input type="text" name="new_name" value="{{ name }}" required>
+        </div>
+        <div>
+          <label>Таймаут, с</label>
+          <input type="text" name="timeout_sec" value="{{ op.timeout_sec if op else 30 }}">
+        </div>
+      </div>
+      <label>Описание</label>
+      <input type="text" name="description" value="{{ op.description if op else '' }}">
+
+      <label>Аргументы (argv)</label>
+      <div id="argv">
+        {% for a in (op.argv if op else ['/usr/bin/', '{workdir}']) %}
+        <input type="text" name="argv" value="{{ a }}" class="mono" style="margin-bottom:6px">
+        {% endfor %}
+      </div>
+      <button type="button" class="btn ghost sm" onclick="addArg()">＋ аргумент</button>
+      <div class="card-note" style="margin-top:10px">
+        Первый аргумент — <span class="mono">{python}</span>, <span class="mono">{app_dir}/…</span>
+        либо путь в /usr/bin, /bin, /usr/local/bin, /opt.
+        Плейсхолдеры: <span class="mono">{workdir}</span> — временная папка запуска,
+        <span class="mono">{app_dir}</span> — корень сервиса,
+        <span class="mono">{python}</span> — интерпретатор из venv;
+        параметр подставляется <b>только отдельным аргументом</b>
+        (<span class="mono">{имя}</span>, для списка файлов <span class="mono">{имя...}</span>).
+      </div>
+
+      <label>Собирать результаты (glob)</label>
+      <input type="text" name="collect" value="{{ op.collect if op and op.collect else '' }}"
+             placeholder="*.pdf" class="mono" style="max-width:240px">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><span class="card-title">Параметры</span>
+      <span class="card-note">значения проверяются до запуска</span></div>
+    <div class="card-body">
+      <div id="params">
+        {% for p in (params if params else []) %}
+        <div class="param" style="margin-bottom:12px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <input type="text" name="p_name" value="{{ p.name }}" placeholder="имя" class="mono">
+            <select name="p_type">
+              {% for value, title in param_types %}
+              <option value="{{ value }}" {{ 'selected' if value == p.type }}>{{ title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <input type="text" name="p_pattern" value="{{ p.pattern }}" class="mono"
+                 placeholder="^[-\w\s]{1,100}$" style="margin-top:6px">
+          <label style="display:flex;gap:8px;align-items:center;margin:8px 0 0">
+            <input type="checkbox" name="p_required" {{ 'checked' if p.required }}
+                   style="width:auto;height:auto"> обязательный
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="btn ghost sm" onclick="addParam()">＋ параметр</button>
+      <div class="card-note" style="margin-top:10px">
+        Для строкового параметра образец обязателен: он и не пускает в команду
+        ничего лишнего. Файловые параметры принимают токен из хранилища.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="flash" style="margin-top:16px">Операция станет доступна сразу после сохранения — ops.yaml перезаписывается, реестр перечитывается на лету, перезапуск юнита не нужен.</div>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+  <a class="btn ghost" href="/ui/ops">Отмена</a>
+  <button class="btn">Сохранить</button>
+</div>
+</form>
+
+<script>
+function addArg() {
+  const box = document.getElementById('argv');
+  const i = document.createElement('input');
+  i.type = 'text'; i.name = 'argv'; i.className = 'mono';
+  i.style.marginBottom = '6px';
+  box.appendChild(i); i.focus();
+}
+function addParam() {
+  const box = document.getElementById('params');
+  const first = box.querySelector('.param');
+  const node = first
+    ? first.cloneNode(true)
+    : null;
+  if (node) {
+    node.querySelectorAll('input').forEach(x => {
+      if (x.type === 'checkbox') { x.checked = true; } else { x.value = ''; }
+    });
+    box.appendChild(node);
+    return;
+  }
+  const html = `<div class="param" style="margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <input type="text" name="p_name" placeholder="имя" class="mono">
+      <select name="p_type">{% for value, title in param_types %}<option value="{{ value }}">{{ title }}</option>{% endfor %}</select>
+    </div>
+    <input type="text" name="p_pattern" class="mono" placeholder="^[-\\w\\s]{1,100}$" style="margin-top:6px">
+    <label style="display:flex;gap:8px;align-items:center;margin:8px 0 0">
+      <input type="checkbox" name="p_required" checked style="width:auto;height:auto"> обязательный</label>
+  </div>`;
+  box.insertAdjacentHTML('beforeend', html);
+}
+</script>
+{% endblock %}

@@ -51,8 +51,12 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.settings = settings
         self.window = _Window()
-        self.api_allowed = _parse_allowlist(settings.allowlist)
-        self.ui_allowed = _parse_allowlist(settings.allowlist + settings.ui_allowlist)
+        # Петля разрешена всегда: запрос с самого хоста и так означает доступ
+        # к .env и базе, а API-консоль интерфейса ходит именно через неё.
+        loopback = ["127.0.0.1", "::1"]
+        self.api_allowed = _parse_allowlist(settings.allowlist + loopback)
+        self.ui_allowed = _parse_allowlist(settings.allowlist + settings.ui_allowlist
+                                           + loopback)
 
     async def dispatch(self, request: Request, call_next):
         s = self.settings

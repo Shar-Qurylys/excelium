@@ -6,7 +6,10 @@
     <h1>Операции</h1>
     <span class="sub">каталог из ops.yaml — фиксированные команды без shell, параметры по regex</span>
   </div>
-  <div class="head-actions"><span class="chip neutral">операций: {{ ops|length }}</span></div>
+  <div class="head-actions">
+    <span class="chip neutral">операций: {{ ops|length }}</span>
+    <a class="btn" href="/ui/opsedit/new">＋ Новая операция</a>
+  </div>
 </div>
 
 {% if result %}
@@ -36,7 +39,10 @@
 <div class="card">
   <div class="card-head">
     <span class="card-title">{{ name }}</span>
-    <span class="card-note">таймаут {{ op.timeout_sec }} с</span>
+    <span style="display:flex;gap:10px;align-items:center">
+      <span class="card-note">таймаут {{ op.timeout_sec }} с</span>
+      <a class="btn ghost sm" href="/ui/opsedit/{{ name }}">правка</a>
+    </span>
   </div>
   <div class="card-body">
     <div class="muted" style="font-size:13px">{{ op.description or "Без описания" }}</div>

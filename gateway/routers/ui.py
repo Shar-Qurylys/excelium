@@ -299,9 +299,10 @@ def files_delete(request: Request, token: str):
 # --- операции -------------------------------------------------------------
 
 @router.get("/ui/ops")
-def ops_page(request: Request):
+def ops_page(request: Request, flash: str = ""):
     return _page(request, "ops.html", "ops", ops=request.app.state.ops,
-                 files=request.app.state.filestore.list_files(), result=None)
+                 files=request.app.state.filestore.list_files(), result=None,
+                 flash=flash)
 
 
 @router.post("/ui/ops/{name}")
@@ -583,4 +584,213 @@ def file_to_assets(request: Request, token: str):
         return RedirectResponse(f"/ui/files?flash=Не перенесён: {exc}", status_code=302)
     audit_log("file_to_assets", token=token, name=name)
     return RedirectResponse(f"/ui/typst?flash=Картинка доступна шаблонам: assets/{name}",
+                            status_code=302)
+
+
+# --- конструктор операций -------------------------------------------------
+
+def _reload_ops(request: Request, registry: dict) -> None:
+    """Пишет ops.yaml и подменяет реестр в живом процессе — без рестарта."""
+    from ..opsrunner.registry import dump_registry
+    request.app.state.ops_path.write_text(dump_registry(registry), encoding="utf-8")
+    request.app.state.ops = registry
+
+
+@router.get("/ui/opsedit/new")
+def ops_new(request: Request):
+    return _page(request, "ops_edit.html", "ops", op=None, name="",
+                 param_types=PARAM_TYPES)
+
+
+@router.get("/ui/opsedit/{name}")
+def ops_edit(request: Request, name: str):
+    op = request.app.state.ops.get(name)
+    if op is None:
+        return RedirectResponse("/ui/ops", status_code=302)
+    params = [{"name": p.name, "type": p.type, "required": p.required,
+               "pattern": p.pattern.pattern if p.pattern else "",
+               "max_items": p.max_items} for p in op.params.values()]
+    return _page(request, "ops_edit.html", "ops", op=op, name=name,
+                 params=params, param_types=PARAM_TYPES)
+
+
+PARAM_TYPES = (("str", "строка по образцу"), ("file", "файл из хранилища"),
+               ("file_list", "несколько файлов"))
+
+
+@router.post("/ui/opsedit/save")
+async def ops_save(request: Request):
+    from ..opsrunner.registry import OpsConfigError, parse_operation
+    form = await request.form()
+    name = str(form.get("old_name") or "").strip()   # пусто = создаём новую
+    new_name = str(form.get("new_name") or name).strip()
+
+    spec: dict = {"argv": [a for a in form.getlist("argv") if a.strip()]}
+    if str(form.get("description") or "").strip():
+        spec["description"] = str(form["description"]).strip()
+    if str(form.get("collect") or "").strip():
+        spec["collect"] = str(form["collect"]).strip()
+    for key in ("timeout_sec", "max_output_kb"):
+        if str(form.get(key) or "").strip():
+            spec[key] = int(str(form[key]).strip())
+
+    params: dict = {}
+    for pname, ptype, pattern, req in zip(
+            form.getlist("p_name"), form.getlist("p_type"),
+            form.getlist("p_pattern"), form.getlist("p_required")):
+        pname = pname.strip()
+        if not pname:
+            continue
+        entry: dict = {"type": ptype}
+        if ptype == "str":
+            entry["pattern"] = pattern.strip() or "^.{0,200}$"
+        if req != "on":
+            entry["required"] = False
+        params[pname] = entry
+    if params:
+        spec["params"] = params
+
+    registry = dict(request.app.state.ops)
+    try:
+        operation = parse_operation(new_name, spec)
+    except OpsConfigError as exc:
+        return _page(request, "ops_edit.html", "ops",
+                     op=request.app.state.ops.get(name), name=name,
+                     params=[{"name": k, "type": v.get("type", "str"),
+                              "pattern": v.get("pattern", ""),
+                              "required": v.get("required", True), "max_items": 50}
+                             for k, v in params.items()],
+                     draft=spec, param_types=PARAM_TYPES,
+                     flash=str(exc), flash_err=True)
+    if name and name in registry and name != new_name:
+        del registry[name]
+    registry[new_name] = operation
+    _reload_ops(request, registry)
+    audit_log("ops_saved", op=new_name, argv=operation.argv)
+    return RedirectResponse(f"/ui/ops?flash=Операция {new_name} сохранена и уже доступна",
+                            status_code=302)
+
+
+@router.post("/ui/opsedit/delete/{name}")
+def ops_delete(request: Request, name: str):
+    registry = dict(request.app.state.ops)
+    if registry.pop(name, None) is not None:
+        _reload_ops(request, registry)
+        audit_log("ops_deleted", op=name)
+    return RedirectResponse("/ui/ops?flash=Операция удалена", status_code=302)
+
+
+# --- API-консоль ----------------------------------------------------------
+
+API_ENDPOINTS = [
+    ("Задания", [("GET", "/jobs/pending?consumer=docv&limit=20", ""),
+                 ("POST", "/jobs", '{"type": "тест", "payload": {}}'),
+                 ("POST", "/jobs/ack", '{"ids": [1]}')]),
+    ("Рендер", [("POST", "/render/registry/inner", '{"request": []}'),
+                ("POST", "/render/typst/list_soglasovaniya", "{}")]),
+    ("Операции и файлы", [("GET", "/ops", ""),
+                          ("POST", "/ops/translit", '{"params": {"text": "Тест"}}'),
+                          ("GET", "/health", "")]),
+    ("Справочники", [("POST", "/directory/structura",
+                      '[{"uid": "u1", "display_name": "Тест Т.Т."}]'),
+                     ("GET", "/directory", "")]),
+    ("Отладка", [("POST", "/debug/echo", '{"пример": true}')]),
+]
+API_PREFIXES = ("/jobs", "/render", "/ops", "/directory", "/health", "/debug", "/files")
+
+
+@router.get("/ui/api")
+def api_console(request: Request, method: str = "GET",
+                path: str = "/jobs/pending?consumer=docv&limit=20", body: str = ""):
+    return _page(request, "api.html", "api", groups=API_ENDPOINTS,
+                 method=method, path=path, body=body, result=None,
+                 log=request.app.state.apilog.items())
+
+
+@router.post("/ui/api")
+async def api_call(request: Request, method: str = Form("GET"),
+                   path: str = Form(...), body: str = Form("")):
+    """Вызывает собственную точку шлюза изнутри — с теми же токенами,
+    что предъявляет Doc-V. Чужие адреса не допускаются."""
+    import time
+
+    import httpx
+
+    settings = request.app.state.settings
+    path = path.strip()
+    if not path.startswith(API_PREFIXES):
+        return _page(request, "api.html", "api", groups=API_ENDPOINTS, method=method,
+                     path=path, body=body, result=None,
+                     log=request.app.state.apilog.items(),
+                     flash="Консоль вызывает только точки шлюза: "
+                           + ", ".join(API_PREFIXES), flash_err=True)
+    token = settings.token_ops if path.startswith("/ops") else settings.token_docv
+    if path == "/jobs" and method == "POST":
+        token = next(iter(settings.producer_tokens.values()), "")
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    if body.strip():
+        headers["Content-Type"] = "application/json"
+
+    started = time.monotonic()
+    try:
+        transport = httpx.ASGITransport(app=request.app, client=("127.0.0.1", 0))
+        async with httpx.AsyncClient(transport=transport, base_url="http://gateway",
+                                     timeout=30) as client:
+            response = await client.request(method, path, headers=headers,
+                                            content=body.strip() or None)
+        text, status = response.text, response.status_code
+    except Exception as exc:  # ошибка вызова — тоже результат для журнала
+        text, status = f"{type(exc).__name__}: {exc}", 0
+    duration = int((time.monotonic() - started) * 1000)
+    request.app.state.apilog.add(method, path, status, duration, len(text))
+
+    pretty = text
+    try:
+        pretty = json.dumps(json.loads(text), ensure_ascii=False, indent=2)
+    except ValueError:
+        pass
+    curl = (f"curl -X {method} 'http://{settings.base_url.split('//')[-1]}{path}'"
+            + (f" \\\n  -H 'Authorization: Bearer <токен>'" if token else "")
+            + (f" \\\n  -H 'Content-Type: application/json' \\\n  -d '{body.strip()}'"
+               if body.strip() else ""))
+    return _page(request, "api.html", "api", groups=API_ENDPOINTS, method=method,
+                 path=path, body=body, log=request.app.state.apilog.items(),
+                 result={"status": status, "duration_ms": duration, "size": len(text),
+                         "text": pretty[:20000], "curl": curl,
+                         "tone": ("success" if status and status < 300 else
+                                  "warn" if status and status < 500 else "danger")})
+
+
+# --- настройки ------------------------------------------------------------
+
+def _mask(token: str) -> str:
+    if not token:
+        return "не задан"
+    return token[:4] + "…" + token[-4:] if len(token) > 12 else "задан"
+
+
+@router.get("/ui/settings")
+def settings_page(request: Request, flash: str = ""):
+    s = request.app.state.settings
+    return _page(request, "settings.html", "settings", flash=flash,
+                 values=request.app.state.settings_store.current(),
+                 tokens=[("Doc-V", "GW_TOKEN_DOCV", _mask(s.token_docv)),
+                         ("Операции", "GW_TOKEN_OPS", _mask(s.token_ops)),
+                         ("Веб-интерфейс", "GW_TOKEN_ADMIN", _mask(s.token_admin)),
+                         ("Код подлинности", "GW_VERIFY_SECRET", _mask(s.verify_secret))],
+                 producers=[(name, _mask(tok)) for name, tok in s.producer_tokens.items()],
+                 allowlist=s.allowlist, ui_allowlist=s.ui_allowlist,
+                 base_url=s.base_url, var_dir=str(s.var_dir),
+                 typst_bin=typst_binary() or s.typst_bin)
+
+
+@router.post("/ui/settings")
+async def settings_save(request: Request):
+    form = await request.form()
+    try:
+        applied = request.app.state.settings_store.save(dict(form))
+    except ValueError as exc:
+        return RedirectResponse(f"/ui/settings?flash={exc}", status_code=302)
+    audit_log("settings_saved", values=applied)
+    return RedirectResponse("/ui/settings?flash=Настройки применены на лету",
                             status_code=302)

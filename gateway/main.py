@@ -13,6 +13,7 @@ from .jobsqueue.db import init_db
 from .logging_setup import setup_logging
 from .config import APP_DIR, Settings
 from .renderers.approvers import ApproverMatrix
+from .apilog import ApiLog
 from .directory import DirectoryStore
 from .heartbeat import Heartbeat
 from .renderers.registry_outer import load_banks
@@ -20,6 +21,7 @@ from .renderers.typst_store import TypstStore
 from .renderers.typst_renderer import configure as configure_typst
 from .renderers.typst_renderer import typst_available, typst_binary
 from .opsrunner.registry import load_registry
+from .settings_store import SettingsStore
 from .jobsqueue.service import JobQueue
 from .routers import debug, directory, files, jobs, ops, render, ui
 from .security import SecurityMiddleware
@@ -43,7 +45,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.template_inner = APP_DIR / "templates" / "excel" / "template.xlsx"
         app.state.template_outer = APP_DIR / "templates" / "excel" / "template_outer.xlsx"
         app.state.template_priority = APP_DIR / "templates" / "excel" / "template_priority_registry.xlsx"
-        app.state.ops = load_registry(APP_DIR / "ops.yaml")
+        app.state.ops_path = APP_DIR / "ops.yaml"
+        app.state.ops = load_registry(app.state.ops_path)
+        app.state.settings_store = SettingsStore(settings, settings.var_dir / "settings.json")
+        app.state.settings_store.load()
+        app.state.apilog = ApiLog()
         app.state.jobs = JobQueue(settings.db_path, lease_seconds=settings.lease_seconds,
                                   keep_days=settings.jobs_keep_days)
         app.state.heartbeat = Heartbeat(settings.db_path)

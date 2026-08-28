@@ -217,3 +217,76 @@ def test_dashboard_shows_directories(client):
          "department": "Бухгалтерия"}])
     r = client.get("/ui")
     assert "structura" in r.text and ">1<" in r.text  # имя и число записей на карточке
+
+
+def test_ops_builder_creates_and_reloads(client, tmp_path):
+    """Операция создаётся из интерфейса и сразу доступна — без перезапуска."""
+    _login(client)
+    ops_file = tmp_path / "ops.yaml"
+    ops_file.write_text("operations: {}\n", encoding="utf-8")
+    client.app.state.ops_path = ops_file
+    client.app.state.ops = {}
+
+    r = client.post("/ui/opsedit/save", follow_redirects=True, data={
+        "new_name": "echo_test", "description": "эхо", "timeout_sec": "10",
+        "argv": ["/bin/echo", "{text}"],
+        "p_name": ["text"], "p_type": ["str"],
+        "p_pattern": [r"^[-\w\s]{1,50}$"], "p_required": ["on"]})
+    assert "сохранена" in r.text
+    assert "echo_test" in client.app.state.ops           # реестр перечитан на лету
+    assert "echo_test" in ops_file.read_text(encoding="utf-8")  # и записан в файл
+
+    # операция работает сразу
+    r = client.post("/ui/ops/echo_test", data={"text": "привет"})
+    assert "привет" in r.text
+
+    r = client.post("/ui/opsedit/delete/echo_test", follow_redirects=True)
+    assert "echo_test" not in client.app.state.ops
+
+
+def test_ops_builder_rejects_dangerous_command(client, tmp_path):
+    """argv[0] вне разрешённых каталогов не сохраняется."""
+    _login(client)
+    client.app.state.ops_path = tmp_path / "ops.yaml"
+    before = dict(client.app.state.ops)
+    r = client.post("/ui/opsedit/save", data={
+        "new_name": "hack", "argv": ["/home/radmin/evil.sh"], "timeout_sec": "10"})
+    assert "argv[0]" in r.text
+    assert client.app.state.ops == before
+
+
+def test_api_console_calls_own_endpoint(client):
+    _login(client)
+    r = client.post("/ui/api", data={"method": "GET", "path": "/health", "body": ""})
+    assert r.status_code == 200
+    # Jinja экранирует кавычки, поэтому сравниваем по содержимому
+    assert "status" in r.text and "ok" in r.text
+    assert 'class="chip success">200' in r.text
+    assert "curl -X GET" in r.text
+    assert client.app.state.apilog.items()[0]["path"] == "/health"
+
+
+def test_api_console_refuses_foreign_host(client):
+    _login(client)
+    r = client.post("/ui/api", data={"method": "GET", "path": "http://evil.example.com/x"})
+    assert "только точки шлюза" in r.text
+
+
+def test_settings_apply_live(client):
+    _login(client)
+    r = client.post("/ui/settings", data={"file_ttl_hours": "48", "lease_seconds": "90"},
+                    follow_redirects=True)
+    assert "применены" in r.text
+    assert client.settings.file_ttl_hours == 48 and client.settings.lease_seconds == 90
+    assert (client.settings.var_dir / "settings.json").is_file()
+    # границы соблюдаются
+    r = client.post("/ui/settings", data={"file_ttl_hours": "99999"}, follow_redirects=True)
+    assert "допустимо от" in r.text
+    assert client.settings.file_ttl_hours == 48
+
+
+def test_settings_page_masks_tokens(client):
+    _login(client)
+    text = client.get("/ui/settings").text
+    assert "GW_TOKEN_DOCV" in text
+    assert "test-docv-token" not in text  # значение не раскрывается
