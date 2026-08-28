@@ -1,10 +1,11 @@
-// ЛИСТ СОГЛАСОВАНИЯ ДОКУМЕНТА.
+// КАРТОЧКА ДОГОВОРА (лист согласования).
 //
 // Оформление — по дизайн-системе «Приёмка ERP SHARK»: шалфейная
 // палитра, надзаголовок вразрядку, нумерованные разделы, плашки-теги,
 // моноширинные числа и даты.
 //
-// POST /render/typst/list_soglasovaniya. Контракт:
+// POST /render/typst/contract_card (или GET с ?data=…, тогда ответ —
+// сам PDF, см. deploy/README-docv.md). Контракт:
 // {
 //   "organization": {"name": "ТОО \"СМУ Аргон\"", "code": "СМ",
 //                    "blank_filepath": "blank_sm.png",  // или blank_file_name;
@@ -18,8 +19,7 @@
 //   "approved_by": [["№","код визы","uid сотрудника","uid должности",
 //                    "2026-08-20T14:48:47+05:00","комментарий","версия"], ...],
 //   "rows": [{"fio","position","decision","date","comment"}],  // альтернатива
-//   "stage_label": "ЭТАП",             // подпись групп; "" — не группировать
-//   "qr": "адрес карточки"
+//   "stage_label": "ЭТАП"              // подпись групп; "" — не группировать
 // }
 // Коды визы (из справочника поля «Виза»): 1 — Согласен, -1 — Не согласен,
 // 2 — Подписан, -2 — Не подписан; незнакомый код печатается как есть.
@@ -72,16 +72,11 @@
   footer: context {
     set text(size: 7.5pt, fill: ink-3)
     let total = counter(page).final().at(0)
-    let has-qr = data.at("qr", default: "") != ""
-    grid(
-      columns: if has-qr { (0.95cm, 1fr, auto) } else { (1fr, auto) },
-      column-gutter: 8pt, align: horizon,
-      ..if has-qr { (image("qr.png", width: 0.9cm),) },
+    grid(columns: (1fr, auto), column-gutter: 8pt, align: horizon,
       align(left)[
         Doc-V · #meta.at("generated_at", default: "")
         #if meta.at("verify_code", default: "") != "" [
           · код подлинности #text(font: mono, weight: "bold")[#meta.verify_code]]
-        #if has-qr [ · QR открывает карточку]
       ],
       align(right)[#if total > 1 [
         #text(font: mono)[#counter(page).display() / #total]]],

@@ -92,12 +92,12 @@ ACTUAL = {
 
 
 @pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
-def test_list_soglasovaniya_actual_contract(client):
+def test_contract_card_actual_contract(client):
     """Фактический контракт: organization и sum объектами, плоский approved_by."""
     client.post("/directory/structura", headers=docv_headers(), json=[
         {"uid": "p-1", "display_name": "Шелевий Ю.В.", "position": "Снабженец"},
         {"uid": "p-2", "display_name": "Бекмуратов Е.И.", "position": "Начальник ЮО"}])
-    r = client.post("/render/typst/list_soglasovaniya", json=ACTUAL, headers=docv_headers())
+    r = client.post("/render/typst/contract_card", json=ACTUAL, headers=docv_headers())
     assert r.status_code == 200, r.text
     token = r.json()["download_url"].rsplit("/", 1)[1]
     pdf = client.get(f"/files/{token}").content
@@ -121,31 +121,31 @@ def test_list_soglasovaniya_actual_contract(client):
 
 
 @pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
-def test_list_soglasovaniya_legacy_shapes(client):
+def test_contract_card_legacy_shapes(client):
     """Старые формы полей не должны ронять шаблон."""
     legacy = dict(ACTUAL, organization="ТОО «Строкой»",
                   sum=[{"currency": "KZT", "sum": 144000, "vat": "с НДС"}],
                   approved_by=[ACTUAL["approved_by"]])  # лишняя вложенность
-    r = client.post("/render/typst/list_soglasovaniya", json=legacy, headers=docv_headers())
+    r = client.post("/render/typst/contract_card", json=legacy, headers=docv_headers())
     assert r.status_code == 200, r.text
 
 
 @pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
-def test_list_soglasovaniya_minimal(client):
+def test_contract_card_minimal(client):
     # почти пустые данные не должны ронять компиляцию
-    r = client.post("/render/typst/list_soglasovaniya", json={"rows": []},
+    r = client.post("/render/typst/contract_card", json={"rows": []},
                     headers=docv_headers())
     assert r.status_code == 200, r.text
 
 
 @pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
-def test_list_soglasovaniya_on_blank(client):
+def test_contract_card_on_blank(client):
     import io
     from PIL import Image
     buf = io.BytesIO()
     Image.new("RGB", (827, 1169), "white").save(buf, format="PNG")
     client.app.state.typst_store.save_asset("blank_test.png", buf.getvalue())
-    r = client.post("/render/typst/list_soglasovaniya", json={
+    r = client.post("/render/typst/contract_card", json={
         "org": {"name": "ТОО «Тест»", "blank": "blank_test.png", "top_margin": 5},
         "document_number": "1", "rows": [],
     }, headers=docv_headers())
@@ -174,7 +174,7 @@ def test_approved_by_resolved_via_directory(client):
                 json=[{"uid": "p-1", "name": "Абдрахманова Х.М."}])
     client.post("/directory/dolzhnosti", headers=docv_headers(),
                 json=[{"uid": "d-1", "name": "Главный бухгалтер"}])
-    r = client.post("/render/typst/list_soglasovaniya", json={
+    r = client.post("/render/typst/contract_card", json={
         "document_number": "1",
         "approved_by": [[["1", "1", "p-1", "d-1", "2026-08-20T14:48:47+05:00", "", "1"]]],
     }, headers=docv_headers())
@@ -213,7 +213,7 @@ def test_approved_by_position_from_structura_entry(client):
     client.post("/directory/structura", headers=docv_headers(), json=[
         {"uid": "p-9", "display_name": "Омарова Г.А.", "position": "Финансовый директор",
          "department": "Финансы"}])
-    r = client.post("/render/typst/list_soglasovaniya", json={
+    r = client.post("/render/typst/contract_card", json={
         "document_number": "1",
         "approved_by": [[["1", "1", "p-9", "d-неизвестен-uid-длинный", "2026-08-20T14:48:47+05:00", "", "1"]]],
     }, headers=docv_headers())
@@ -225,7 +225,7 @@ def test_all_visa_codes_labelled(client):
     """Каждый код поля «Виза» получает свою подпись, незнакомый — как есть."""
     client.post("/directory/structura", headers=docv_headers(),
                 json=[{"uid": "u", "display_name": "Тест Т.Т.", "position": "Директор"}])
-    r = client.post("/render/typst/list_soglasovaniya", json=dict(ACTUAL, approved_by=[
+    r = client.post("/render/typst/contract_card", json=dict(ACTUAL, approved_by=[
         ["1", "1", "u", "d", "2026-08-20T10:00:00+05:00", "", ""],
         ["1", "-1", "u", "d", "2026-08-21T10:00:00+05:00", "", ""],
         ["2", "2", "u", "d", "2026-08-22T10:00:00+05:00", "", ""],
@@ -250,13 +250,13 @@ def test_blank_selected_by_filepath(client):
     buf = io.BytesIO()
     Image.new("RGB", (827, 1169), "white").save(buf, format="PNG")
     client.app.state.typst_store.save_asset("blank_sm.png", buf.getvalue())
-    r = client.post("/render/typst/list_soglasovaniya", json=dict(
+    r = client.post("/render/typst/contract_card", json=dict(
         ACTUAL, organization={"name": "ТОО «Тест»", "code": "СМ",
                               "blank_filepath": "/upload/files/2026/blank_sm.png",
                               "top_margin": 4.5}), headers=docv_headers())
     assert r.status_code == 200, r.text
     # несуществующий бланк — честная ошибка компиляции, а не тихий пропуск
-    r = client.post("/render/typst/list_soglasovaniya", json=dict(
+    r = client.post("/render/typst/contract_card", json=dict(
         ACTUAL, organization={"name": "X", "blank_filepath": "нет_такого.png"}),
         headers=docv_headers())
     assert r.status_code == 400
@@ -264,7 +264,7 @@ def test_blank_selected_by_filepath(client):
 
 @pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
 def test_grouping_can_be_switched_off(client):
-    r = client.post("/render/typst/list_soglasovaniya",
+    r = client.post("/render/typst/contract_card",
                     json=dict(ACTUAL, stage_label=""), headers=docv_headers())
     assert r.status_code == 200
     import pymupdf
@@ -272,3 +272,56 @@ def test_grouping_can_be_switched_off(client):
     text = pymupdf.open(stream=client.get(f"/files/{token}").content,
                         filetype="pdf")[0].get_text()
     assert "ЭТАП" not in text.replace(" ", "")
+
+
+@pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
+def test_get_with_data_returns_pdf_itself(client):
+    """Одно действие Doc-V: GET с JSON в адресе отдаёт сам файл."""
+    import json as _json
+    from urllib.parse import quote
+    payload = _json.dumps({"document_number": "28/П", "subject": "Раствор М200"},
+                          ensure_ascii=False)
+    r = client.get(f"/render/typst/contract_card?data={quote(payload)}",
+                   headers=docv_headers())
+    assert r.status_code == 200, r.text
+    assert r.content.startswith(b"%PDF")
+    assert r.headers["content-type"] == "application/pdf"
+    assert "attachment" in r.headers["content-disposition"]
+    assert "contract_card" in r.headers["content-disposition"]
+    # битый JSON — понятная ошибка, а не пустой PDF
+    assert client.get("/render/typst/contract_card?data=не-json",
+                      headers=docv_headers()).status_code == 422
+
+
+@pytest.mark.skipif(not typst_available(), reason="нет бинаря typst")
+def test_post_direct_returns_pdf(client):
+    r = client.post("/render/typst/contract_card?direct=1", json={"subject": "Тест"},
+                    headers=docv_headers())
+    assert r.status_code == 200 and r.content.startswith(b"%PDF")
+
+
+def test_registry_get_returns_xlsx(client):
+    import json as _json
+    from pathlib import Path
+    from urllib.parse import quote
+    model = _json.loads((Path(__file__).parent / "data" / "model.json")
+                        .read_text(encoding="utf-8"))
+    r = client.get("/render/registry/inner?data=" + quote(_json.dumps(model, ensure_ascii=False)),
+                   headers=docv_headers())
+    assert r.status_code == 200
+    assert r.content[:2] == b"PK"  # xlsx — это zip
+    disposition = r.headers["content-disposition"]
+    assert "attachment" in disposition and "filename*=UTF-8''" in disposition
+    # прежний путь со ссылкой продолжает работать
+    r = client.post("/render/registry/inner", json=model, headers=docv_headers())
+    assert "download_url" in r.json()
+
+
+def test_template_rename_keeps_edits(client):
+    """Переименование list_soglasovaniya -> contract_card не теряет правки."""
+    store = client.app.state.typst_store
+    store.save("list_soglasovaniya", "= Правленый администратором")
+    store.delete("contract_card")
+    assert store.rename("list_soglasovaniya", "contract_card")
+    assert store.get("contract_card") == "= Правленый администратором"
+    assert store.get("list_soglasovaniya") is None

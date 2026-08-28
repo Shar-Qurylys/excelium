@@ -55,6 +55,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.heartbeat = Heartbeat(settings.db_path)
         app.state.directory = DirectoryStore(settings.db_path)
         app.state.typst_store = TypstStore(settings.db_path)
+        # list_soglasovaniya переименован в contract_card: переносим вместе
+        # с правками администратора, чтобы они не потерялись
+        if app.state.typst_store.rename("list_soglasovaniya", "contract_card"):
+            log.info("шаблон list_soglasovaniya переименован в contract_card")
         seeded = app.state.typst_store.seed_from_dir(APP_DIR / "templates" / "typst")
         if seeded:
             log.info("typst-шаблоны импортированы из файлов",

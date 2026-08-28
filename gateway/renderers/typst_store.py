@@ -85,6 +85,17 @@ class TypstStore:
         self.save(name, row["source"])
         return True
 
+    def rename(self, old: str, new: str) -> bool:
+        """Переносит шаблон под новым именем вместе с историей."""
+        source = self.get(old)
+        if source is None or self.get(new) is not None:
+            return False
+        with connect(self.db_path) as conn:
+            conn.execute("UPDATE typst_templates SET name = ? WHERE name = ?", (new, old))
+            conn.execute("UPDATE typst_template_history SET name = ? WHERE name = ?",
+                         (new, old))
+        return True
+
     def seed_from_dir(self, directory: Path) -> int:
         """Импортирует .typ-файлы, которых ещё нет в базе."""
         added = 0
