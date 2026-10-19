@@ -99,3 +99,24 @@ def test_company_name_variations_still_find_signers(client):
     # неизвестная компания по-прежнему честно даёт пустой блок
     unknown = store.resolve("ТОО «Никто»", "Нигде")
     assert unknown["coordinators"] == [] and unknown["utverzhdayu"] is None
+
+
+def test_concatenated_info_contract_date():
+    from gateway.renderers.common import create_concatenated_info
+
+    # дата из date_of_contract дописывается к названию
+    info = create_concatenated_info({"name_of_contract": "№51/ДУ",
+                                     "date_of_contract": "2024-03-05T00:00:00+06:00"})
+    assert info == "Дог. №51/ДУ от 05/03/2024"
+    # название уже содержит «от …» — второй раз дату не пишем
+    info = create_concatenated_info({"name_of_contract": "28/ДУ/АДМ от 01/03/2024",
+                                     "date_of_contract": "2024-03-01T00:00:00+06:00"})
+    assert info == "Дог. 28/ДУ/АДМ от 01/03/2024"
+    # без даты договор не теряется
+    assert create_concatenated_info({"name_of_contract": "№7",
+                                     "date_of_contract": ""}) == "Дог. №7"
+    # ДС по-прежнему вместо договора
+    info = create_concatenated_info({"zusaetzliches_vertrag": "Доп. соглашение №3",
+                                     "name_of_contract": "№7",
+                                     "date_of_contract": "2024-03-05"})
+    assert info == "ДС №3"

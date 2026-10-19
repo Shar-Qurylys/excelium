@@ -131,6 +131,21 @@ def _process_field(data_item: dict, field: FieldDef) -> Optional[str]:
     return f"{field.prefix}{value}{field.suffix}"
 
 
+_HAS_DATE = re.compile(r"\bот\b", re.IGNORECASE)
+
+
+def _contract_part(data_item: dict) -> Optional[str]:
+    """«Дог. {название} от дд/мм/гггг». Дату не дописываем, если Doc-V уже
+    вписал её в название («28/ДУ/АДМ от 01/03/2024»); без даты — только название."""
+    name = str(data_item.get("name_of_contract") or "").strip()
+    if not name:
+        return None
+    date = str(data_item.get("date_of_contract") or "").strip()
+    if date and not _HAS_DATE.search(name):
+        return f"Дог. {name} от {format_datetime(date)}"
+    return f"Дог. {name}"
+
+
 def create_concatenated_info(data_item: dict) -> str:
     parts = []
     payment_type = str(data_item.get("payment_type") or "").strip()
@@ -150,8 +165,9 @@ def create_concatenated_info(data_item: dict) -> str:
         zv_text = str(zusaetzliches_vertrag).removeprefix("Доп. соглашение").strip()
         parts.append(f"ДС {zv_text}")
     else:
-        if data_item.get("name_of_contract") and data_item.get("date_of_contract"):
-            parts.append(f"Дог. {data_item['name_of_contract']}")
+        contract = _contract_part(data_item)
+        if contract:
+            parts.append(contract)
 
     payment_number = data_item.get("payment_number") or ""
     if payment_number:
