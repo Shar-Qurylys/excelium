@@ -179,10 +179,10 @@ table input[type=text], table select { height:var(--h-control-sm); font-size:var
   background:var(--neutral-bg); color:var(--neutral-fg);
   font:500 var(--fs-xs)/1 var(--font-sans); white-space:nowrap;
 }
-.badge.success, .badge.acked  { background:var(--success-bg); border-color:var(--success-border); color:var(--success-fg); }
-.badge.warn,    .badge.pending{ background:var(--warn-bg);    border-color:var(--warn-border);    color:var(--warn-fg); }
+.badge.success { background:var(--success-bg); border-color:var(--success-border); color:var(--success-fg); }
+.badge.warn    { background:var(--warn-bg);    border-color:var(--warn-border);    color:var(--warn-fg); }
 .badge.danger                 { background:var(--danger-bg);  border-color:var(--danger-border);  color:var(--danger-fg); }
-.badge.info,    .badge.leased { background:var(--info-bg);    border-color:var(--info-border);    color:var(--info-fg); }
+.badge.info    { background:var(--info-bg);    border-color:var(--info-border);    color:var(--info-fg); }
 .count {
   display:inline-block; padding:0 6px; border-radius:10px; min-width:18px; text-align:center;
   background:var(--neutral-bg); color:var(--neutral-fg);

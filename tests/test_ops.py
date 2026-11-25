@@ -165,7 +165,7 @@ def test_ops_validation_error_is_not_a_run(ops_client):
 
 
 def test_ops_history_sweep_limits(ops_client):
-    from gateway.jobsqueue.db import connect
+    from gateway.db import connect
     from gateway.opsrunner import history as h
     store = ops_client.app.state.ops_history
     result = {"op": "echo", "ok": True, "exit_code": 0, "duration_ms": 1,

@@ -12,7 +12,6 @@ from gateway.main import create_app  # noqa: E402
 TOKEN_DOCV = "test-docv-token"
 TOKEN_OPS = "test-ops-token"
 TOKEN_ADMIN = "test-admin-token"
-PRODUCER_TOKENS = {"onec": "test-producer-token"}
 
 
 @pytest.fixture()
@@ -23,7 +22,6 @@ def settings(tmp_path):
         token_ops=TOKEN_OPS,
         token_admin=TOKEN_ADMIN,
         verify_secret="test-verify-secret",
-        producer_tokens=PRODUCER_TOKENS,
         base_url="http://testserver",
         var_dir=tmp_path / "var",
         _env_file=None,
@@ -51,6 +49,3 @@ def docv_headers():
 def ops_headers():
     return {"Authorization": f"Bearer {TOKEN_OPS}"}
 
-
-def producer_headers():
-    return {"Authorization": f"Bearer {PRODUCER_TOKENS['onec']}"}

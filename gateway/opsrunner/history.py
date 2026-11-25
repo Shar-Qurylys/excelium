@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from ..jobsqueue.db import connect
+from ..db import connect
 
 OUTPUT_LIMIT = 64 * 1024   # stdout и stderr хранятся до 64 КБ каждый
 KEEP_DAYS = 30

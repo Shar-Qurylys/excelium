@@ -1,7 +1,7 @@
 """Настройки, правимые на лету (var/settings.json).
 
 Правится только то, что безопасно менять из интерфейса: сроки хранения,
-аренда заданий, лимиты частоты. Токены и списки адресов живут в .env и
+лимиты частоты. Токены и списки адресов живут в .env и
 здесь только показываются: смена их из веба может закрыть доступ самому
 администратору или открыть его чужим.
 """
@@ -12,16 +12,10 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 # поле -> (подпись, единица, минимум, максимум)
-# Параметры очереди заданий в интерфейсе не показываются (раздел заданий из
-# панели убран), но правятся через settings.json и сохраняются при записи.
-QUEUE_KEYS = ("jobs_keep_days", "lease_seconds", "jobs_payload_limit")
 EDITABLE = {
     "file_ttl_hours": ("Хранить файлы", "часов", 1, 24 * 30),
-    "jobs_keep_days": ("Хранить подтверждённые задания", "дней", 1, 365),
-    "lease_seconds": ("Аренда задания", "секунд", 10, 3600),
     "rate_limit_per_min": ("Лимит запросов", "в минуту", 10, 10000),
     "ops_rate_limit_per_min": ("Лимит запуска операций", "в минуту", 1, 1000),
-    "jobs_payload_limit": ("Лимит payload задания", "байт", 1024, 8 * 1024 * 1024),
 }
 
 
@@ -59,25 +53,14 @@ class SettingsStore:
             applied[key] = value
         for key, value in applied.items():
             setattr(self.settings, key, value)
-        # форма шлёт не все поля — прежние значения остальных сохраняем
-        stored = {}
-        if self.path.is_file():
-            try:
-                stored = json.loads(self.path.read_text(encoding="utf-8"))
-            except ValueError:
-                stored = {}
-        if not isinstance(stored, dict):
-            stored = {}
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps({**stored, **applied}, ensure_ascii=False,
-                                        indent=1), encoding="utf-8")
+        self.path.write_text(json.dumps(applied, ensure_ascii=False, indent=1),
+                             encoding="utf-8")
         return applied
 
     def current(self) -> list[dict]:
         out = []
         for key, (label, unit, low, high) in EDITABLE.items():
-            if key in QUEUE_KEYS:
-                continue
             out.append({"key": key, "label": label, "unit": unit,
                         "min": low, "max": high, "value": getattr(self.settings, key)})
         return out

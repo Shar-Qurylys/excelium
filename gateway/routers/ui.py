@@ -173,8 +173,6 @@ def dashboard(request: Request, flash: str = "", flash_err: int = 0):
 
     beats = []
     for kind, info in state.heartbeat.snapshot().items():
-        if kind == "jobs_poll":  # очередь заданий в интерфейсе больше не ведётся
-            continue
         age = info["age_sec"]
         if age is None:
             dot, text = "off", "ещё не было"
@@ -809,7 +807,7 @@ API_ENDPOINTS = [
                      ("GET", "/signers?company=ТОО «Шар-Кұрылыс»", "")]),
     ("Отладка", [("POST", "/debug/echo", '{"пример": true}')]),
 ]
-API_PREFIXES = ("/jobs", "/render", "/ops", "/directory", "/signers", "/health",
+API_PREFIXES = ("/render", "/ops", "/directory", "/signers", "/health",
                 "/debug", "/files")
 
 
@@ -839,8 +837,6 @@ async def api_call(request: Request, method: str = Form("GET"),
                      flash="Консоль вызывает только точки шлюза: "
                            + ", ".join(API_PREFIXES), flash_err=True)
     token = settings.token_ops if path.startswith("/ops") else settings.token_docv
-    if path == "/jobs" and method == "POST":
-        token = next(iter(settings.producer_tokens.values()), "")
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     if body.strip():
         headers["Content-Type"] = "application/json"

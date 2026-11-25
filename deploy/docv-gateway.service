@@ -1,5 +1,5 @@
 [Unit]
-Description = Doc-V Gateway (registries, Typst, ops, jobs) for Shar-Qurylys
+Description = Doc-V Gateway (registries, Typst, ops, directories) for Shar-Qurylys
 After = network.target
 
 [Service]

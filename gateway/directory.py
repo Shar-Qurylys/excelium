@@ -11,7 +11,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .jobsqueue.db import connect
+from .db import connect
 
 NAME_RE = re.compile(r"^[a-z0-9_-]{1,32}$")
 MAX_ITEMS = 20000

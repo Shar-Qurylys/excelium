@@ -23,7 +23,7 @@ import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .jobsqueue.db import connect
+from .db import connect
 
 log = logging.getLogger(__name__)
 

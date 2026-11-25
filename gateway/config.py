@@ -11,10 +11,13 @@ APP_DIR = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="GW_", env_file=APP_DIR / ".env", env_file_encoding="utf-8"
+        env_prefix="GW_", env_file=APP_DIR / ".env", env_file_encoding="utf-8",
+        # в .env на сервере могут остаться переменные снятых функций
+        # (GW_PRODUCER_TOKENS и др.) — сервис не должен из-за них падать
+        extra="ignore",
     )
 
-    # Безопасность. allowlist — API (сервер Doc-V и продюсеры);
+    # Безопасность. allowlist — API (сервер Doc-V);
     # ui_allowlist — ДОПОЛНИТЕЛЬНО для /ui, /health и /files/*
     # (машины администраторов, офисная подсеть). Оба принимают
     # адреса и подсети (CIDR).
@@ -26,7 +29,6 @@ class Settings(BaseSettings):
     token_ops: str = ""
     token_admin: str = ""  # вход в веб-интерфейс /ui
     verify_secret: str = ""  # HMAC-код подлинности на печатных формах
-    producer_tokens: dict[str, str] = {}
 
     # Адрес, по которому Doc-V скачивает файлы (не берём из Host-заголовка)
     base_url: str = "http://192.168.30.19:25353"
@@ -44,11 +46,6 @@ class Settings(BaseSettings):
     # Хранилище
     var_dir: Path = APP_DIR / "var"
     file_ttl_hours: int = 72
-    jobs_keep_days: int = 30
-
-    # Очередь заданий
-    lease_seconds: int = 60  # 2 x интервал опроса планировщика (30 с)
-    jobs_payload_limit: int = 64 * 1024
 
     # Rate limit (fixed window, на процесс)
     rate_limit_per_min: int = 60

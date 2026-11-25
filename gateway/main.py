@@ -9,7 +9,7 @@ from fastapi import Response
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from .filestore.store import FileStore
-from .jobsqueue.db import init_db
+from .db import init_db
 from .logging_setup import setup_logging
 from .config import APP_DIR, Settings
 from .apilog import ApiLog
@@ -24,8 +24,7 @@ from .opsrunner.history import OpsHistory
 from .opsrunner.registry import load_registry
 from .settings_store import SettingsStore
 from .signers import SignerStore
-from .jobsqueue.service import JobQueue
-from .routers import debug, directory, files, jobs, ops, render, signers, ui
+from .routers import debug, directory, files, ops, render, signers, ui
 from .security import SecurityMiddleware
 
 log = logging.getLogger(__name__)
@@ -53,8 +52,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings_store = SettingsStore(settings, settings.var_dir / "settings.json")
         app.state.settings_store.load()
         app.state.apilog = ApiLog()
-        app.state.jobs = JobQueue(settings.db_path, lease_seconds=settings.lease_seconds,
-                                  keep_days=settings.jobs_keep_days)
         app.state.heartbeat = Heartbeat(settings.db_path)
         app.state.directory = DirectoryStore(settings.db_path)
         app.state.signers.link_by_name()
@@ -107,7 +104,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(files.router)
     app.include_router(render.router)
     app.include_router(ops.router)
-    app.include_router(jobs.router)
     app.include_router(ui.router)
     app.include_router(debug.router)
     app.include_router(directory.router)
@@ -138,7 +134,6 @@ async def _sweep_loop(app: FastAPI) -> None:
         await asyncio.sleep(SWEEP_INTERVAL_SEC)
         try:
             await asyncio.to_thread(app.state.filestore.sweep)
-            await asyncio.to_thread(app.state.jobs.sweep)
             await asyncio.to_thread(app.state.directory.sweep)
             await asyncio.to_thread(app.state.ops_history.sweep)
         except Exception:

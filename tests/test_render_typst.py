@@ -183,7 +183,7 @@ def test_approved_by_resolved_via_directory(client):
 
 def test_directory_sweep_stale(client):
     from datetime import datetime, timedelta, timezone
-    from gateway.jobsqueue.db import connect
+    from gateway.db import connect
     store = client.app.state.directory
     store.replace("structura", [{"uid": "x", "name": "Тест"}])
     old = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat(timespec="seconds")

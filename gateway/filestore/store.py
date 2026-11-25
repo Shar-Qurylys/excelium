@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from ..config import Settings
-from ..jobsqueue.db import connect
+from ..db import connect
 
 log = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import openpyxl
 
 from conftest import docv_headers
-from gateway.jobsqueue.db import connect
+from gateway.db import connect
 from gateway.signers import fio_key, print_name, short_name
 
 MODEL = json.loads((Path(__file__).parent / "data" / "model.json").read_text(encoding="utf-8"))

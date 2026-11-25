@@ -262,10 +262,10 @@ def test_api_console_refuses_foreign_host(client):
 
 def test_settings_apply_live(client):
     _login(client)
-    r = client.post("/ui/settings", data={"file_ttl_hours": "48", "lease_seconds": "90"},
+    r = client.post("/ui/settings", data={"file_ttl_hours": "48", "rate_limit_per_min": "90"},
                     follow_redirects=True)
     assert "применены" in r.text
-    assert client.settings.file_ttl_hours == 48 and client.settings.lease_seconds == 90
+    assert client.settings.file_ttl_hours == 48 and client.settings.rate_limit_per_min == 90
     assert (client.settings.var_dir / "settings.json").is_file()
     # границы соблюдаются
     r = client.post("/ui/settings", data={"file_ttl_hours": "99999"}, follow_redirects=True)
@@ -595,7 +595,7 @@ def test_signers_export_and_import_with_backup(client):
 def test_log_page_filters(client):
     from gateway.logging_setup import audit_log
     _login(client)
-    audit_log("deny_ip", ip="10.0.0.9", path="/jobs")
+    audit_log("deny_ip", ip="10.0.0.9", path="/render/registry/inner")
     audit_log("directory_replaced", name="structura", count=3)
     audit_log("ui_file_uploaded", name="бланк.png", size=10)
     r = client.get("/ui/log")
@@ -628,3 +628,21 @@ def test_audit_rotation_reads_older_file(client):
     assert names[0] == "новая" and "старая" in names
     events, _ = query(var, days=7, limit=10)
     assert "старая" not in [e["details"].get("op") for e in events]
+
+
+def test_jobs_queue_removed(client):
+    """Очереди заданий больше нет: ни API, ни страницы в интерфейсе."""
+    assert client.get("/jobs/pending", headers=docv_headers()).status_code == 404
+    assert client.post("/jobs/ack", headers=docv_headers(), json={"ids": [1]}).status_code == 404
+    _login(client)
+    assert client.get("/ui/jobs").status_code == 404
+    assert 'href="/ui/jobs"' not in client.get("/ui").text
+
+
+def test_old_env_vars_ignored(tmp_path):
+    """В .env на сервере может остаться GW_PRODUCER_TOKENS — старт не падает."""
+    from gateway.config import Settings
+    env = tmp_path / ".env"
+    env.write_text('GW_PRODUCER_TOKENS={"onec": "x"}\nGW_LEASE_SECONDS=60\n'
+                   "GW_TOKEN_DOCV=abc\n", encoding="utf-8")
+    assert Settings(_env_file=env).token_docv == "abc"

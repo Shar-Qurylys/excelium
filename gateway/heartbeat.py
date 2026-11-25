@@ -1,5 +1,5 @@
-"""Отметки «Doc-V выходил на связь»: последний опрос очереди, последний
-рендер, последняя операция. Пишутся в базу (переживают перезапуск и
+"""Отметки «Doc-V выходил на связь»: последний рендер, последняя
+операция. Пишутся в базу (переживают перезапуск и
 видны из любого воркера); частые касания одного вида схлопываются —
 запись не чаще раза в 5 секунд."""
 import threading
@@ -7,9 +7,9 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .jobsqueue.db import connect
+from .db import connect
 
-KINDS = {"jobs_poll": "Опрос очереди", "render": "Рендер", "ops": "Операции"}
+KINDS = {"render": "Рендер", "ops": "Операции"}
 WRITE_EVERY_SEC = 5
 
 

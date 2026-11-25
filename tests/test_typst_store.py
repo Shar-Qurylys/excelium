@@ -5,7 +5,7 @@ from gateway.renderers.typst_store import HISTORY_KEEP, TypstStore
 
 @pytest.fixture()
 def store(settings):
-    from gateway.jobsqueue.db import init_db
+    from gateway.db import init_db
     init_db(settings.db_path)
     return TypstStore(settings.db_path)
 

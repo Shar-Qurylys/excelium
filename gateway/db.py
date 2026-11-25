@@ -1,27 +1,13 @@
-"""SQLite база шлюза: 
-Функции: 
-  1. Ведение очереди заданий.
-  2. Ведение реестра выданных файлов.
+"""SQLite база шлюза: файлы, шаблоны Typst, справочники, подписанты,
+история операций, отметки связи.
+
+Таблица jobs прежней очереди заданий больше не заводится; в уже
+существующей базе на сервере она остаётся нетронутой и не используется.
 """
 import sqlite3
 from pathlib import Path
 
 _SCHEMA = """
-CREATE TABLE IF NOT EXISTS jobs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  consumer TEXT NOT NULL DEFAULT 'docv',
-  producer TEXT NOT NULL,
-  idempotency_key TEXT,
-  type TEXT NOT NULL,
-  payload TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','leased','acked')),
-  attempts INTEGER NOT NULL DEFAULT 0,
-  leased_until TEXT,
-  created_at TEXT NOT NULL,
-  acked_at TEXT,
-  UNIQUE (producer, idempotency_key)
-);
-CREATE INDEX IF NOT EXISTS ix_jobs_lease ON jobs(consumer, status, leased_until);
 CREATE TABLE IF NOT EXISTS files (
   token TEXT PRIMARY KEY,
   orig_name TEXT NOT NULL,

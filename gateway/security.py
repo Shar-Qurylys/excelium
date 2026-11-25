@@ -98,12 +98,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
                 if path.startswith("/ops/") or path == "/ops":
                     ok = _match(supplied, s.token_ops)
-                elif path == "/jobs" and method == "POST":
-                    producer = _match_producer(supplied, s.producer_tokens)
-                    ok = producer is not None
-                    request.state.producer = producer
                 else:
-                    # /render/*, /jobs/pending, /jobs/ack и всё прочее — токен Doc-V
+                    # /render/*, /directory/*, /signers и всё прочее — токен Doc-V
                     ok = _match(supplied, s.token_docv)
                 if not ok:
                     audit_log("deny_token", ip=ip, path=path)
@@ -160,9 +156,3 @@ def _match(supplied: str, expected: str) -> bool:
     return bool(expected) and secrets.compare_digest(
         supplied.encode("utf-8"), expected.encode("utf-8"))
 
-
-def _match_producer(supplied: str, producers: dict[str, str]) -> str | None:
-    for name, token in producers.items():
-        if _match(supplied, token):
-            return name
-    return None

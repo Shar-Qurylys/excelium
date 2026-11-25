@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from gateway.jobsqueue.db import connect
+from gateway.db import connect
 
 
 def test_roundtrip(client):
@@ -40,7 +40,7 @@ def test_sweep_keeps_pinned(client):
     assert client.get(f"/files/{keep}").status_code == 200
     assert client.get(f"/files/{drop}").status_code == 404
     # старая база без колонки pinned получает её при init_db
-    from gateway.jobsqueue.db import init_db
+    from gateway.db import init_db
     init_db(client.settings.db_path)
     with connect(client.settings.db_path) as conn:
         assert "pinned" in {r["name"] for r in conn.execute("PRAGMA table_info(files)")}

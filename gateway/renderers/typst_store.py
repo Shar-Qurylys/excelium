@@ -14,7 +14,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..jobsqueue.db import connect
+from ..db import connect
 
 NAME_RE = re.compile(r"^[a-z0-9_-]{1,64}$")
 ASSET_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}\.(png|jpg|jpeg|gif|svg)$")
