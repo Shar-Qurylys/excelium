@@ -14,6 +14,7 @@ from .logging_setup import setup_logging
 from .config import APP_DIR, Settings
 from .apilog import ApiLog
 from .directory import DirectoryStore
+from . import restgw
 from .heartbeat import Heartbeat
 from .renderers.registry_outer import load_banks
 from .renderers.typst_store import TypstStore
@@ -67,6 +68,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             log.info("typst-шаблоны импортированы из файлов",
                      extra={"data": {"count": seeded}})
         task = asyncio.create_task(_sweep_loop(app))
+        # Справочники из restgw — в фоне: недоступный restgw не должен
+        # задерживать старт (таймаут 30 с на каждый набор), а до ответа
+        # рендер работает на справочниках из базы.
+        app.state.directory_startup = asyncio.create_task(asyncio.to_thread(
+            restgw.refresh_all, app.state.directory, settings, "startup"))
         configure_typst(settings.typst_bin)
         binary = typst_binary()
         if binary:
@@ -82,6 +88,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "allowlist_api": settings.allowlist,
             "allowlist_ui": settings.ui_allowlist,
             "base_url": settings.base_url,
+            "restgw_url": settings.restgw_url,
+            "restgw_configured": restgw.configured(settings),
             "ui_enabled": bool(settings.token_admin),
             "env_file": str(APP_DIR / ".env"),
         }})
@@ -90,6 +98,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
+        # поток забора не прервать: ждём его, он ограничен таймаутом
+        with contextlib.suppress(Exception):
+            await app.state.directory_startup
 
     app = FastAPI(title="Doc-V Gateway", lifespan=lifespan)
     app.add_middleware(SecurityMiddleware, settings=settings)

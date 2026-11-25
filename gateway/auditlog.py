@@ -29,6 +29,8 @@ EVENT_TITLES = {
     "ops_saved": "Сохранена операция",
     "ops_deleted": "Удалена операция",
     "directory_replaced": "Обновлён справочник из Doc-V",
+    "directory_refreshed": "Справочник забран из restgw",
+    "directory_refresh_failed": "Справочник не забран из restgw",
     "typst_template_saved": "Сохранён шаблон Typst",
     "typst_template_restored": "Возвращена версия шаблона",
     "typst_template_deleted": "Удалён шаблон Typst",

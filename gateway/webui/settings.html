@@ -67,16 +67,17 @@
     </div>
 
     <div class="card">
-      <div class="card-head"><span class="card-title">Создающие работу в очередь</span>
-        <span class="card-note">GW_PRODUCER_TOKENS</span></div>
-      {% for name, masked in producers %}
+      <div class="card-head"><span class="card-title">Справочники из Doc-V (restgw)</span>
+        <span class="card-note">Правится в .env, нужен перезапуск</span></div>
       <div class="list-row">
-        <span class="name mono">{{ name }}</span>
-        <span class="mono muted">{{ masked }}</span>
+        <span class="name">Адрес — GW_RESTGW_URL</span>
+        <span class="mono muted">{{ restgw_url or "—" }}</span>
       </div>
-      {% else %}
-      <div class="empty">Нет создающих программ.</div>
-      {% endfor %}
+      <div class="list-row">
+        <span class="name">Ключ — GW_RESTGW_KEY</span>
+        {% if restgw_key == 'не задан' %}<span class="badge warn">Не задан</span>
+        {% else %}<span class="mono muted">{{ restgw_key }}</span>{% endif %}
+      </div>
     </div>
   </div>
 </div>

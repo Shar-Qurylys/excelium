@@ -17,6 +17,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
+from .. import restgw
 from ..auditlog import EVENT_TITLES, query as audit_query
 from ..config import APP_DIR
 from ..logging_setup import audit_log
@@ -104,7 +105,7 @@ SAMPLE = json.dumps({"request": [{
 }]}, ensure_ascii=False, indent=1)
 
 
-REFRESHABLE = {"dash", "jobs", "log"}
+REFRESHABLE = {"dash", "log"}
 
 
 def _page(request: Request, template: str, page: str, **ctx) -> HTMLResponse:
@@ -147,8 +148,21 @@ def logout():
 
 # --- обзор ----------------------------------------------------------------
 
+def _directories(state) -> list[dict]:
+    """Справочники для «Обзора»: всё, что есть в базе, плюс наборы restgw,
+    которые ещё не приходили, — чтобы у них тоже была кнопка обновления."""
+    rows = {d["name"]: d for d in state.directory.info()}
+    for name in restgw.DATASETS:
+        rows.setdefault(name, {"name": name, "count": 0, "updated_at": None,
+                               "columns": ""})
+    out = []
+    for name in sorted(rows, key=lambda n: (n not in restgw.DATASETS, n)):
+        out.append({**rows[name], "refreshable": name in restgw.DATASETS})
+    return out
+
+
 @router.get("/ui")
-def dashboard(request: Request):
+def dashboard(request: Request, flash: str = "", flash_err: int = 0):
     state = request.app.state
     files = state.filestore.list_files()
 
@@ -159,6 +173,8 @@ def dashboard(request: Request):
 
     beats = []
     for kind, info in state.heartbeat.snapshot().items():
+        if kind == "jobs_poll":  # очередь заданий в интерфейсе больше не ведётся
+            continue
         age = info["age_sec"]
         if age is None:
             dot, text = "off", "ещё не было"
@@ -173,7 +189,9 @@ def dashboard(request: Request):
 
     now = datetime.now(ALMATY)
     return _page(request, "dashboard.html", "dash", beats=beats,
-                 directories=state.directory.info(),
+                 directories=_directories(state),
+                 restgw_ready=restgw.configured(state.settings),
+                 flash=flash, flash_err=bool(flash_err),
                  typst=typst_available(), typst_path=typst_binary(),
                  libreoffice=shutil.which("libreoffice") is not None,
                  libreoffice_path=shutil.which("libreoffice"),
@@ -182,7 +200,7 @@ def dashboard(request: Request):
                  files_mb=round(sum(f["size"] for f in files) / 1024 / 1024, 1),
                  templates_count=len(state.typst_store.list_templates()),
                  ops_count=len(state.ops), denies=denies,
-                 jobs=state.jobs.stats(), events=events,
+                 events=events,
                  health_title=("Шлюз в работе, все каналы на связи"
                                if all(b["dot"] == "" for b in beats) or not beats
                                else "Шлюз в работе, есть молчащие каналы"),
@@ -210,50 +228,19 @@ def log_page(request: Request, search: str = "", tone: str = "", event: str = ""
                  event_options=sorted(EVENT_TITLES.items(), key=lambda kv: kv[1]))
 
 
-# --- задания --------------------------------------------------------------
-
-JOB_STATUS_TITLES = {"pending": "в очереди", "leased": "выдано Doc-V",
-                     "acked": "подтверждено"}
-
-
-@router.get("/ui/jobs")
-def jobs_page(request: Request, status: str = "", search: str = "",
-              producer: str = "", limit: int = PAGE_SIZE, flash: str = ""):
-    queue = request.app.state.jobs
-    rows = queue.list_jobs(status=status or None, search=search.strip(),
-                           producer=producer, limit=limit + 1)
-    has_more = len(rows) > limit
-    return _page(request, "jobs.html", "jobs", rows=rows[:limit], status_filter=status,
-                 search=search, producer=producer, producers=queue.producers(),
-                 status_titles=JOB_STATUS_TITLES, has_more=has_more,
-                 next_limit=limit + PAGE_SIZE, flash=flash)
-
-
-@router.post("/ui/jobs/ack/{job_id}")
-def jobs_ack(request: Request, job_id: int):
-    result = request.app.state.jobs.ack([job_id])
-    audit_log("ui_job_ack", job_id=job_id, result=result)
-    return RedirectResponse("/ui/jobs?flash=Задание подтверждено", status_code=302)
-
-
-@router.post("/ui/jobs/new")
-def jobs_new(request: Request, type: str = Form(...), payload: str = Form(...)):
+@router.post("/ui/directory/{name}/refresh")
+async def directory_refresh(request: Request, name: str):
+    """Кнопка «Обновить из Doc-V» на «Обзоре»: забор набора из restgw."""
+    state = request.app.state
     try:
-        data = json.loads(payload)
-        if not isinstance(data, dict):
-            raise ValueError
-    except ValueError:
-        queue = request.app.state.jobs
-        return _page(request, "jobs.html", "jobs", rows=queue.list_jobs(limit=PAGE_SIZE),
-                     status_filter="", search="", producer="",
-                     producers=queue.producers(), status_titles=JOB_STATUS_TITLES,
-                     has_more=False, next_limit=PAGE_SIZE,
-                     flash="Payload — не JSON-объект", flash_err=True)
-    job_id, _ = request.app.state.jobs.enqueue(
-        producer="ui", job_type=type.strip() or "тест", payload=data,
-        idempotency_key=None)
-    audit_log("ui_job_enqueued", job_id=job_id)
-    return RedirectResponse(f"/ui/jobs?flash=Задание {job_id} в очереди", status_code=302)
+        result = await run_in_threadpool(restgw.refresh, state.directory,
+                                         state.settings, name, "ui")
+    except restgw.RestgwError as exc:
+        return RedirectResponse("/ui?flash_err=1&flash=" + quote(
+            f"Справочник «{name}» не обновлён: {exc}"), status_code=302)
+    return RedirectResponse("/ui?flash=" + quote(
+        f"Справочник «{name}» обновлён из Doc-V: {result['items']} записей"),
+        status_code=302)
 
 
 # --- файлы ----------------------------------------------------------------
@@ -810,9 +797,6 @@ def ops_delete(request: Request, name: str):
 # --- API-консоль ----------------------------------------------------------
 
 API_ENDPOINTS = [
-    ("Задания", [("GET", "/jobs/pending?consumer=docv&limit=20", ""),
-                 ("POST", "/jobs", '{"type": "тест", "payload": {}}'),
-                 ("POST", "/jobs/ack", '{"ids": [1]}')]),
     ("Рендер", [("POST", "/render/registry/inner", '{"request": []}'),
                 ("POST", "/render/typst/contract_card", "{}")]),
     ("Операции и файлы", [("GET", "/ops", ""),
@@ -820,6 +804,7 @@ API_ENDPOINTS = [
                           ("GET", "/health", "")]),
     ("Справочники", [("POST", "/directory/structura",
                       '[{"uid": "u1", "display_name": "Тест Т.Т."}]'),
+                     ("POST", "/directory/structura/refresh", ""),
                      ("GET", "/directory", ""),
                      ("GET", "/signers?company=ТОО «Шар-Кұрылыс»", "")]),
     ("Отладка", [("POST", "/debug/echo", '{"пример": true}')]),
@@ -830,7 +815,7 @@ API_PREFIXES = ("/jobs", "/render", "/ops", "/directory", "/signers", "/health",
 
 @router.get("/ui/api")
 def api_console(request: Request, method: str = "GET",
-                path: str = "/jobs/pending?consumer=docv&limit=20", body: str = ""):
+                path: str = "/directory", body: str = ""):
     return _page(request, "api.html", "api", groups=API_ENDPOINTS,
                  method=method, path=path, body=body, result=None,
                  log=request.app.state.apilog.items())
@@ -907,7 +892,7 @@ def settings_page(request: Request, flash: str = ""):
                          ("Операции", "GW_TOKEN_OPS", _mask(s.token_ops)),
                          ("Веб-интерфейс", "GW_TOKEN_ADMIN", _mask(s.token_admin)),
                          ("Код подлинности", "GW_VERIFY_SECRET", _mask(s.verify_secret))],
-                 producers=[(name, _mask(tok)) for name, tok in s.producer_tokens.items()],
+                 restgw_url=s.restgw_url, restgw_key=_mask(s.restgw_key),
                  allowlist=s.allowlist, ui_allowlist=s.ui_allowlist,
                  base_url=s.base_url, var_dir=str(s.var_dir),
                  typst_bin=typst_binary() or s.typst_bin)
@@ -1297,8 +1282,8 @@ def signers_roles_link(request: Request):
     audit_log("signers_roles_linked", **result)
     if not result["staff"]:
         return RedirectResponse(
-            "/ui/signers/roles?flash=Структура пуста. Выгрузите её из Doc-V:"
-            " действие «HTTP-запрос» POST /directory/structura&flash_err=1",
+            "/ui/signers/roles?flash=Структура пуста. Обновите её из Doc-V:"
+            " «Обзор» → «Справочники из Doc-V» → «Обновить из Doc-V»&flash_err=1",
             status_code=302)
     flash = (f"Сопоставлено по ФИО: {result['linked']}."
              + (f" Не нашлись в Структуре: {result['left']} — выберите руками."

@@ -25,15 +25,11 @@
     <span class="sub">{{ today_line }}</span>
   </div>
   <div class="head-actions">
-    <a class="btn" href="/ui/jobs">К очереди</a>
     <a class="btn primary" href="/ui/render">{{ icon('file') }}Собрать документ</a>
   </div>
 </div>
 
 <div class="stats">
-  <div class="stat"><span class="label">В очереди</span><span class="value">{{ jobs.get('pending', 0) }}</span></div>
-  <div class="stat"><span class="label">Выданы Doc-V</span><span class="value">{{ jobs.get('leased', 0) }}</span></div>
-  <div class="stat"><span class="label">Подтверждено</span><span class="value">{{ jobs.get('acked', 0) }}</span></div>
   <div class="stat"><span class="label">Файлов в хранилище</span><span class="value">{{ files_count }}</span><span class="sub">{{ files_mb }} МБ</span></div>
   <div class="stat"><span class="label">Шаблонов Typst</span><span class="value">{{ templates_count }}</span></div>
   <div class="stat"><span class="label">Отказов за сутки</span><span class="value">{{ denies }}</span></div>
@@ -60,7 +56,7 @@
     <div class="card">
       <div class="card-head">
         <span class="card-title">Связь с Doc-V</span>
-        <span class="card-note">опрос каждые 30 секунд</span>
+        <span class="card-note">последние обращения</span>
       </div>
       {% for b in beats %}
       <div class="list-row">
@@ -69,13 +65,12 @@
         <span class="status-item"><span class="dot {{ b.dot or 'ok' }}"></span>{{ b.text }}</span>
       </div>
       {% endfor %}
-      <div class="card-body card-note">Если «Опрос очереди» молчит дольше 90 секунд, планировщик задач на сервере Doc-V остановлен. Планировщик не попадает в экспорт конфигурации, поэтому следить за ним можно только здесь.</div>
     </div>
 
     <div class="card">
       <div class="card-head">
         <span class="card-title">Справочники из Doc-V</span>
-        <span class="card-note">расшифровка UID</span>
+        <span class="card-note">через restgw · расшифровка UID</span>
       </div>
       {% for d in directories %}
       <div class="list-row">
@@ -85,10 +80,14 @@
         </span>
         <span class="count">{{ d.count }} записей</span>
         <span class="hint nowrap">{{ d.updated_at|dt }}</span>
+        {% if d.refreshable %}
+        <form method="post" action="/ui/directory/{{ d.name }}/refresh">
+          <button class="btn sm" data-busy="Забираем…"{% if not restgw_ready %} disabled title="restgw не настроен: GW_RESTGW_URL и GW_RESTGW_KEY в .env"{% endif %}>{{ icon('refresh') }}Обновить из Doc-V</button>
+        </form>
+        {% endif %}
       </div>
-      {% else %}
-      <div class="empty">Пока не приходили. Прогоните отправку из «Шлюза».</div>
       {% endfor %}
+      <div class="card-body card-note">{% if restgw_ready %}Справочники забираются из restgw при старте шлюза и по сигналу Doc-V после каждой пересборки набора (POST /directory/{имя}/refresh). Если restgw недоступен, остаётся прежний справочник, причина — в журнале.{% else %}restgw не настроен: задайте GW_RESTGW_URL и GW_RESTGW_KEY в .env и перезапустите сервис. Пока справочники принимаются только через POST /directory/{имя}.{% endif %}</div>
     </div>
   </div>
 </div>

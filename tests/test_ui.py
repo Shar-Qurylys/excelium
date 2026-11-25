@@ -19,7 +19,8 @@ def _login(client):
 def test_ui_requires_login(client):
     r = client.get("/ui", follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"] == "/ui/login"
-    assert client.post("/ui/jobs/ack/1", follow_redirects=False).status_code == 403
+    assert client.post("/ui/directory/structura/refresh",
+                       follow_redirects=False).status_code == 403
 
 
 def test_wrong_token_stays_on_login(client):
@@ -32,23 +33,6 @@ def test_dashboard_after_login(client):
     _login(client)
     r = client.get("/ui")
     assert r.status_code == 200 and "Обзор" in r.text
-
-
-def test_jobs_roundtrip(client):
-    _login(client)
-    r = client.post("/ui/jobs/new",
-                    data={"type": "тест", "payload": '{"a": 1}'},
-                    follow_redirects=True)
-    assert "в очереди" in r.text and "тест" in r.text
-    r = client.post("/ui/jobs/ack/1", follow_redirects=True)
-    assert "подтверждено" in r.text
-    assert client.app.state.jobs.stats() == {"acked": 1}
-
-
-def test_jobs_bad_payload(client):
-    _login(client)
-    r = client.post("/ui/jobs/new", data={"type": "т", "payload": "не json"})
-    assert "не JSON-объект" in r.text
 
 
 def test_files_upload_and_delete(client):
@@ -133,9 +117,10 @@ def test_dashboard_heartbeat_card(client):
     _login(client)
     r = client.get("/ui")
     assert "Связь с Doc-V" in r.text and "ещё не было" in r.text
-    client.get("/jobs/pending", headers={"Authorization": "Bearer test-docv-token"})
+    client.app.state.heartbeat.touch("render")
     r = client.get("/ui")
     assert "с назад" in r.text
+    assert "Опрос очереди" not in r.text
 
 
 def test_asset_raw_and_thumbnails(client):
@@ -211,7 +196,10 @@ def test_files_download_zip(client):
 
 def test_dashboard_shows_directories(client):
     _login(client)
-    assert "Пока не приходили" in client.get("/ui").text
+    empty = client.get("/ui").text
+    # наборы restgw видны и до первого забора, с кнопкой обновления
+    assert "positions" in empty and "departments" in empty and "0 записей" in empty
+    assert "/ui/directory/structura/refresh" in empty
     client.app.state.directory.replace("structura", [
         {"uid": "u1", "display_name": "Абдрахманова Х.М.", "position": "Гл. бухгалтер",
          "department": "Бухгалтерия"}])
@@ -301,25 +289,6 @@ def test_dates_are_human_and_local(client):
     import re
     assert re.search(r"\d\d\.\d\d\.20\d\d \d\d:\d\d", text)  # дд.мм.гггг чч:мм
     assert "назад" in text or "только что" in text
-
-
-def test_jobs_search_and_payload_visible(client):
-    _login(client)
-    q = client.app.state.jobs
-    q.enqueue(producer="1c", job_type="оплата", payload={"счёт": "KZ12"},
-              idempotency_key=None)
-    q.enqueue(producer="ui", job_type="тест", payload={"x": 1}, idempotency_key=None)
-
-    text = client.get("/ui/jobs").text
-    assert "KZ12" in text  # payload виден прямо в строке
-
-    only = client.get("/ui/jobs?search=оплата").text
-    assert "оплата" in only and ">тест<" not in only
-    by_producer = client.get("/ui/jobs?producer=ui").text
-    assert "тест" in by_producer and "оплата" not in by_producer
-    # поиск по содержимому payload
-    assert "оплата" in client.get("/ui/jobs?search=KZ12").text
-    assert "Нет работ по заданному фильтру" in client.get("/ui/jobs?search=неттакого").text
 
 
 def test_files_search_and_paging(client):
@@ -478,7 +447,7 @@ def test_company_bulk_apply_sets_one_signer_everywhere(client):
 def test_roles_link_without_structura_says_so(client):
     _login(client)
     r = client.post("/ui/signers/roles/link", follow_redirects=True)
-    assert "Выгрузите её" in r.text
+    assert "Обновите её из Doc-V" in r.text
 
 
 def test_every_page_renders_clean(client):
@@ -488,7 +457,7 @@ def test_every_page_renders_clean(client):
     login = client.get("/ui/login")
     assert login.status_code == 200 and '<svg xmlns="http://www.w3.org/2000/svg" style="display:none"' in login.text
     _login(client)
-    pages = ["/ui", "/ui/log", "/ui/jobs", "/ui/files", "/ui/ops", "/ui/render", "/ui/api",
+    pages = ["/ui", "/ui/log", "/ui/files", "/ui/ops", "/ui/render", "/ui/api",
              "/ui/settings", "/ui/typst", "/ui/signers", "/ui/signers/sets",
              "/ui/signers/roles", "/ui/signers/rule/new", "/ui/signers/set/list_1",
              "/ui/opsedit/new"]
