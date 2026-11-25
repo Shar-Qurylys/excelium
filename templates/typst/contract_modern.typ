@@ -172,8 +172,7 @@
       grid(columns: if qr-ok { (auto, 1.8cm) } else { (auto,) }, column-gutter: 8pt, align: (right + bottom, right),
         stack(spacing: 4pt,
           if qr-ok { cap("Документ в Doc-V") }, if qr-ok { text(7pt, fill: ink-3, font: sans)[наведите камеру] },
-          v(4pt),
-          cap("Код подлинности"), text(9pt, font: mono, fill: ink, weight: "bold", meta.at("verify_code", default: ""))),
+          ..if meta.at("verify_code", default: "") != "" { (v(4pt), cap("Код подлинности"), text(9pt, font: mono, fill: ink, weight: "bold", meta.verify_code)) }),
         ..if qr-ok { (image("qr.png", width: 1.8cm),) })))
   },
   footer: context { set text(7pt, fill: ink-3, font: sans); [Сформировано в Doc-V #meta.at("generated_at", default: "")] })
