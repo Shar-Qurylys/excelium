@@ -120,6 +120,14 @@
 #let signer = split-person(get("signer"))
 
 // «03m Сумма к оплате»: 70400000 → (label, текст значения)
+// lists: {"02tВид_оплаты": "1=Аванс за СМР|2=Оплата по АВР"} — названия значений полей-списков
+#let lists = { let l = data.at("lists", default: (:)); if type(l) == dictionary { l } else { (:) } }
+#let list-name(k, v) = {
+  let m = s(lists.at(k, default: ""))
+  if m == "" { return v }
+  for pair in m.split("|") { let kv = pair.split("="); if kv.len() >= 2 and kv.at(0) == v { return kv.slice(1).join("=") } }
+  v
+}
 #let entries(key) = {
   let obj = data.at(key, default: (:))
   if type(obj) != dictionary { return () }
@@ -128,7 +136,7 @@
     let cl = k.clusters()                      // «03mСумма_к_оплате»: NN, вид, подпись с «_» вместо пробелов
     let kind = cl.at(2, default: "t")
     let label = cl.slice(3).join().replace("_", " ")
-    let raw = rq(s(v).replace(regex("<br\\s*/?>"), "\n").replace(regex("<[^>]+>"), " ").replace("&nbsp;", " ").replace("&quot;", "\"").replace("&amp;", "&").trim())
+    let raw = rq(list-name(k, s(v)).replace(regex("<br\\s*/?>"), "\n").replace(regex("<[^>]+>"), " ").replace("&nbsp;", " ").replace("&quot;", "\"").replace("&amp;", "&").trim())
     let text = if raw == "" or raw == "0" and kind == "d" { "" }
       else if kind == "m" { money(num(raw)) + " " + cur-sign(currency) }
       else if kind == "d" { date-long(raw) }
