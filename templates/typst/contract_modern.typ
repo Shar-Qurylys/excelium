@@ -167,13 +167,11 @@
 
 #set page(paper: "a4", margin: (x: 1.5cm, top: 1.1cm, bottom: 1.5cm),
   background: context if here().page() == 1 { place(top, rect(width: 100%, height: 4.75cm, fill: night)) },
-  foreground: context if here().page() == counter(page).final().first() and (qr-ok or meta.at("verify_code", default: "") != "") {
+  foreground: context if here().page() == counter(page).final().first() and qr-ok {
     place(right + bottom, dx: -1.5cm, dy: -1.45cm, box(fill: white, stroke: 0.6pt + line-c, radius: 6pt, inset: 7pt,
-      grid(columns: if qr-ok { (auto, 1.8cm) } else { (auto,) }, column-gutter: 8pt, align: (right + bottom, right),
-        stack(spacing: 4pt,
-          if qr-ok { cap("Документ в Doc-V") }, if qr-ok { text(7pt, fill: ink-3, font: sans)[наведите камеру] },
-          ..if meta.at("verify_code", default: "") != "" { (v(4pt), cap("Код подлинности"), text(9pt, font: mono, fill: ink, weight: "bold", meta.verify_code)) }),
-        ..if qr-ok { (image("qr.png", width: 1.8cm),) })))
+      grid(columns: (auto, 1.8cm), column-gutter: 8pt, align: (right + bottom, right),
+        stack(spacing: 4pt, cap("Документ в Doc-V"), text(7pt, fill: ink-3, font: sans)[наведите камеру]),
+        image("qr.png", width: 1.8cm))))
   },
   footer: context { set text(7pt, fill: ink-3, font: sans); [Сформировано в Doc-V #meta.at("generated_at", default: "")] })
 #set text(font: sans, size: 9pt, fill: ink, lang: "ru")

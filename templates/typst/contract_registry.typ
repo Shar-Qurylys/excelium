@@ -176,9 +176,7 @@
 #let label(t) = text(6.8pt, fill: ink-3, tracking: 0.06em, upper(t))
 
 // ---- шапка
-#grid(columns: (1fr, auto), align: (left + bottom, right + bottom),
-  [#text(7.5pt, tracking: 0.12em, weight: "bold", upper(org.name)) #if org.position != "" { h(10pt); text(7.5pt, tracking: 0.12em, fill: ink-3, upper(org.position)) }],
-  if meta.at("verify_code", default: "") != "" [#label("Код подлинности") #h(5pt) #text(9pt, font: mono, weight: "bold")[#meta.verify_code]])
+#[#text(7.5pt, tracking: 0.12em, weight: "bold", upper(org.name)) #if org.position != "" { h(10pt); text(7.5pt, tracking: 0.12em, fill: ink-3, upper(org.position)) }]
 #v(2pt)
 #line(length: 100%, stroke: 1.4pt + ink)
 #v(8pt)
