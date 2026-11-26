@@ -110,9 +110,9 @@
 // type, number, date, status, version, organization, title, currency, initiator, department, signer, qr,
 // tiles / details — объекты {"NNk Подпись": значение}, NN — порядок, k: m — деньги, d — дата, t — текст;
 // approvals_html / signing_html — «Результаты согласования» / «Результаты подписания» (HTML Doc-V).
-#let org = split-person(get("organization"))
+#let org = { let o = split-person(get("organization")); if o.position.match(regex("^[A-Z]{3}$")) != none { (name: o.name, position: "") } else { o } }
 #let type-name = get("type")
-#let number = get("number").replace("№", "").trim()
+#let number = { let n = get("number").replace("№", "").trim(); if n.match(regex("\\d")) == none { "" } else { n } }
 #let version = get("version")
 #let status = get("status")
 #let currency = if has("currency") { get("currency") } else { "KZT" }
@@ -174,6 +174,23 @@
 #let at-date(t) = s(t).split(" ").at(0, default: "")
 #let at-time(t) = { let x = s(t).split(" ").at(1, default: ""); if x.len() >= 5 { x.slice(0, 5) } else { x } }
 #let qr-ok = "qr" in data and s(data.qr) != ""
+// длинный предмет без номера — заголовком становится тип документа, предмет идёт абзацем
+#let long-title = get("title").clusters().len() > 70
+#let card = if has("card") { get("card") } else { "Карточка заявки" }
+// items — строки табличной части (соглашение о взаимозачёте: contract, amount, amount_ds, is_ds); массив или объект объектов
+#let items = {
+  let v = data.at("items", default: ())
+  // плоский массив из «Печать: строки»: по 4 значения на строку (договор, сумма, сумма по ДС, пункт ДС)
+  let rows = if type(v) == array and v.len() > 0 and type(v.at(0)) != dictionary {
+    range(calc.floor(v.len() / 4)).map(i => (contract: v.at(4 * i), amount: v.at(4 * i + 1), amount_ds: v.at(4 * i + 2), is_ds: v.at(4 * i + 3)))
+  } else if type(v) == array { v } else if type(v) == dictionary { (v,) } else { () }
+  rows.filter(r => type(r) == dictionary).map(r => {
+    let ds-amt = num(s(r.at("amount_ds", default: "")))
+    let amt = if ds-amt != 0 { ds-amt } else { num(s(r.at("amount", default: ""))) }
+    let name = s(r.at("contract", default: "")).split(". СТАТУС:").at(0).replace(regex("\\s+"), " ").trim()
+    (contract: rq(name), amount: amt, ds: ds-amt != 0)
+  }).filter(r => r.contract != "" or r.amount != 0)
+}
 
 // Карточка заявки — стиль «Реестр».
 #let ink = rgb("#111418")
@@ -190,7 +207,7 @@
     line(length: 100%, stroke: 0.4pt + hair)
     v(-4pt)
     grid(columns: (auto, 1fr, auto), column-gutter: 14pt,
-      text(fill: ink-2, weight: "bold", upper("Карточка заявки")),
+      text(fill: ink-2, weight: "bold", upper(card)),
       [Сформировано в Doc-V #meta.at("generated_at", default: "")],
       [Стр. #counter(page).display() из #counter(page).final().first()])
   })
@@ -205,13 +222,13 @@
 #v(8pt)
 #grid(columns: (1fr, auto), align: (left + bottom, right + bottom), column-gutter: 12pt,
   stack(spacing: 5pt,
-    text(8.5pt, fill: ink-2, type-name),
-    if number != "" { text(26pt, weight: "bold", tracking: -0.01em)[№ #number] } else { text(18pt, weight: "bold", get("title")) },
+    if number != "" or not long-title { text(8.5pt, fill: ink-2, type-name) },
+    if number != "" { text(26pt, weight: "bold", tracking: -0.01em)[№ #number] } else if long-title { text(22pt, weight: "bold", tracking: -0.01em, type-name) } else { text(18pt, weight: "bold", get("title")) },
     if has("date") { text(9.5pt, fill: ink-2)[от #date-long(get("date"))] }),
   grid(columns: 2, column-gutter: 6pt,
     if version != "" { box(stroke: 0.8pt + hair, inset: (x: 8pt, y: 5pt), text(8pt, fill: ink-2, weight: "bold", upper("Версия " + version))) },
     if status != "" { box(stroke: 0.8pt + accent, inset: (x: 8pt, y: 5pt), text(8pt, fill: accent, weight: "bold", upper(status))) }))
-#if number != "" and has("title") { v(6pt); text(11pt, weight: "bold", get("title")) }
+#if (number != "" or long-title) and has("title") { v(6pt); text(11pt, weight: "bold", get("title")) }
 #v(8pt)
 
 // ---- ключевые цифры
@@ -229,6 +246,23 @@
 #if initiator.name != "" { rows += (text(8pt, fill: ink-2, "Инициатор"), [#initiator.name#if initiator.position != "" [ — #lower-first(initiator.position)]#if has("department") [, #get("department")]]) }
 #if rows.len() > 0 { grid(columns: (3.6cm, 1fr), row-gutter: 9pt, column-gutter: 10pt, ..rows) }
 #v(14pt)
+
+// ---- табличная часть
+#if items.len() > 0 {
+  text(11pt, weight: "bold")[Договоры]
+  v(4pt)
+  line(length: 100%, stroke: 1pt + ink)
+  table(columns: (0.7cm, 1fr, 3.4cm), stroke: (x, y) => (bottom: 0.4pt + hair), inset: (x: 0pt, y: 5pt),
+    align: (left + top, left + top, right + top),
+    table.header(label("№"), label("Договор"), label("Сумма зачёта")),
+    ..items.enumerate().map(((i, r)) => (text(fill: ink-3, str(i + 1)), [#r.contract #if r.ds { h(4pt); text(7pt, fill: accent, weight: "bold", upper("доп. соглашение")) }],
+      text(weight: "bold", money(r.amount) + " " + cur-sign(currency)))).flatten())
+  if items.len() > 1 {
+    grid(columns: (1fr, 3.4cm), inset: (y: 5pt), align: (left, right), text(8pt, fill: ink-2, "Итого"),
+      text(weight: "bold", money(items.map(r => r.amount).sum()) + " " + cur-sign(currency)))
+  }
+  v(14pt)
+}
 
 // ---- согласование
 #if approvals.len() > 0 {
